@@ -1,5 +1,24 @@
+class ExtendableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = this.constructor.name;
+    this.message = message;
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, this.constructor);
+    } else {
+      this.stack = (new Error(message)).stack;
+    }
+  }
+}
 
-module.exports = (service, serviceDetails) => {
+class RpcError extends ExtendableError {
+  constructor(methodName, inner) {
+    super(`An error occurred while executing method ${methodName}`);
+    this.inner = inner;
+  }
+}
+
+exports.createRequestHandler = (service, serviceDetails) => {
   const exposed = serviceDetails.expose;
   const multArg = serviceDetails.multArg || false;
   const serviceName = serviceDetails.service;
@@ -20,8 +39,6 @@ module.exports = (service, serviceDetails) => {
     const body = req.body;
     const args = multArg ? body : [body];
 
-    console.log(req.method, methodName, body, args);
-
     if (req.method === 'GET' && req.path === '/') {
       return res.json(meta);
     }
@@ -37,12 +54,26 @@ module.exports = (service, serviceDetails) => {
       });
     }
 
-    try {
-      Promise.resolve(service[methodName].apply(null, args))
-      .then(result => res.json(result))
-      .catch(err => next(err));
-    } catch (err) {
-      next(err);
+    return Promise.resolve()
+    .then(() => service[methodName].apply(service, args))
+    .then(result => res.json(result))
+    .catch(err => {
+      next(new RpcError(methodName, err));
+    });
+  }
+};
+
+exports.createErrorHandler = () => {
+  return (err, req, res, next) => {
+    if (err instanceof RpcError) {
+      res.status(400).json({
+        message: err.inner.message,
+        code: err.inner.code
+      });
+    } else {
+      res.status(500).json({
+        message: err.message
+      });
     }
   };
-}
+};
