@@ -46,7 +46,7 @@ test(async t => {
     service: 'hello-service'
   };
 
-  app.use('/rpc', bodyParser.json(), inspect, httpRpc(service, meta));
+  app.use('/rpc', bodyParser.json(), inspect, httpRpc.createRequestHandler(service, meta));
 
   const serverAddress = createServerAddress(app);
 
