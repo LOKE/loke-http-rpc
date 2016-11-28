@@ -20,12 +20,12 @@ class RpcError extends ExtendableError {
 
 exports.createRequestHandler = (service, serviceDetails) => {
   const exposed = serviceDetails.expose;
-  const multArg = serviceDetails.multArg || false;
+  const multiArg = serviceDetails.multiArg || serviceDetails.multArg || false;
   const serviceName = serviceDetails.service;
 
   const meta = {
     serviceName,
-    multArg,
+    multiArg,
     interfaces: exposed.map(methodName => {
       return {
         methodName,
@@ -37,7 +37,7 @@ exports.createRequestHandler = (service, serviceDetails) => {
   return (req, res, next) => {
     const methodName = req.path.slice(1); // remove leading slash
     const body = req.body;
-    const args = multArg ? body : [body];
+    const args = multiArg ? body : [body];
 
     if (req.method === 'GET' && req.path === '/') {
       return res.json(meta);
@@ -49,7 +49,7 @@ exports.createRequestHandler = (service, serviceDetails) => {
 
     if (!Array.isArray(args)) {
       return res.status(400).json({
-        message: 'multArg services require an array as input',
+        message: 'multiArg services require an array as input',
         code: 'CRIT_INPUT_ERR'
       });
     }
