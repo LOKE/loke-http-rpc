@@ -27,3 +27,9 @@ Then, if running on port 5000:
 ```
 curl -X POST http://localhost:5000/rpc/doStuff
 ```
+
+Also, to list runtime RPC metadata you can GET /rpc
+
+```
+curl -X GET http://localhost:5000/rpc
+```
