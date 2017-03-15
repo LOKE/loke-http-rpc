@@ -1,3 +1,11 @@
+const pTap = require('p-tap');
+const pFinally = require('p-finally')
+const {Histogram, Counter} = require('prom-client');
+
+const requestDuration = new Histogram('http_rpc_request_duration_seconds', 'Duration of rpc requests', ['handler']);
+const requestCount = new Counter('http_rpc_requests_total', 'The total number of rpc requests received', ['handler']);
+const failureCount = new Counter('http_rpc_failures_total', 'The total number of rpc failures received', ['handler']);
+
 class ExtendableError extends Error {
   constructor(message) {
     super(message);
@@ -54,12 +62,20 @@ exports.createRequestHandler = (service, serviceDetails) => {
       });
     }
 
-    return Promise.resolve()
+    const requestMeta = {handler: `${serviceName}.${methodName}`};
+    const end = requestDuration.startTimer(requestMeta);
+
+    requestCount.inc(requestMeta);
+
+    const result = Promise.resolve()
     .then(() => service[methodName].apply(service, args))
     .then(result => res.json(result))
+    .catch(pTap.catch(() => failureCount.inc(requestMeta)))
     .catch(err => {
       next(new RpcError(methodName, err));
     });
+
+    return pFinally(result, end);
   }
 };
 

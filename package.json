@@ -11,6 +11,14 @@
     "ava": "^0.15.2",
     "body-parser": "^1.15.2",
     "express": "^4.14.0",
-    "got": "^6.3.0"
+    "got": "^6.3.0",
+    "prom-client": "7.x"
+  },
+  "peerDependencies": {
+    "prom-client": "7.x"
+  },
+  "dependencies": {
+    "p-finally": "^1.0.0",
+    "p-tap": "^1.0.0"
   }
 }
