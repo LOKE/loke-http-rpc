@@ -3,21 +3,21 @@ const pFinally = require("p-finally");
 const { Histogram, Counter } = require("prom-client");
 const { BaseError } = require("@loke/errors");
 
-const requestDuration = new Histogram(
-  "http_rpc_request_duration_seconds",
-  "Duration of rpc requests",
-  ["handler"]
-);
-const requestCount = new Counter(
-  "http_rpc_requests_total",
-  "The total number of rpc requests received",
-  ["handler"]
-);
-const failureCount = new Counter(
-  "http_rpc_failures_total",
-  "The total number of rpc failures received",
-  ["handler"]
-);
+const requestDuration = new Histogram({
+  name: "http_rpc_request_duration_seconds",
+  help: "Duration of rpc requests",
+  labelNames: ["handler"]
+});
+const requestCount = new Counter({
+  name: "http_rpc_requests_total",
+  help: "The total number of rpc requests received",
+  labelNames: ["handler"]
+});
+const failureCount = new Counter({
+  name: "http_rpc_failures_total",
+  help: "The total number of rpc failures received",
+  labelNames: ["handler"]
+});
 
 class ExtendableError extends Error {
   constructor(message) {
