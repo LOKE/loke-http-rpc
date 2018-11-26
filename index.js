@@ -1,6 +1,7 @@
 const pTap = require("p-tap");
 const pFinally = require("p-finally");
 const { Histogram, Counter } = require("prom-client");
+const { BaseError } = require("@loke/errors");
 
 const requestDuration = new Histogram(
   "http_rpc_request_duration_seconds",
@@ -94,15 +95,17 @@ exports.createRequestHandler = (service, serviceDetails) => {
 exports.createErrorHandler = () => {
   // eslint-disable-next-line no-unused-vars
   return (err, req, res, next) => {
-    if (err instanceof RpcError) {
-      res.status(400).json({
+    if (!(err instanceof RpcError)) {
+      return res.status(500).json({ message: err.message });
+    }
+
+    if (!(err.inner instanceof BaseError)) {
+      return res.status(400).json({
         message: err.inner.message,
         code: err.inner.code
       });
-    } else {
-      res.status(500).json({
-        message: err.message
-      });
     }
+
+    return res.status(400).json(err.inner.toJSON());
   };
 };
