@@ -1,7 +1,6 @@
 const pTap = require("p-tap");
 const pFinally = require("p-finally");
 const { Histogram, Counter } = require("prom-client");
-const { BaseError } = require("@loke/errors");
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -33,8 +32,12 @@ class ExtendableError extends Error {
 }
 
 class RpcError extends ExtendableError {
-  constructor(methodName, inner) {
-    super(`An error occurred while executing method ${methodName}`);
+  constructor(serviceName, methodName, inner) {
+    super(
+      `An error occurred while executing method ${serviceName}/${methodName}`
+    );
+    this.serviceName = serviceName;
+    this.methodName = methodName;
     this.inner = inner;
   }
 }
@@ -85,27 +88,25 @@ exports.createRequestHandler = (service, serviceDetails) => {
       .then(result => res.json(result))
       .catch(pTap.catch(() => failureCount.inc(requestMeta)))
       .catch(err => {
-        next(new RpcError(methodName, err));
+        next(new RpcError(serviceName, methodName, err));
       });
 
     return pFinally(result, end);
   };
 };
 
-exports.createErrorHandler = () => {
+exports.createErrorHandler = (args = {}) => {
+  const { log = () => {} } = args;
   // eslint-disable-next-line no-unused-vars
   return (err, req, res, next) => {
     if (!(err instanceof RpcError)) {
       return res.status(500).json({ message: err.message });
     }
 
-    if (!(err.inner instanceof BaseError)) {
-      // console.log(
-      //   err.inner.message,
-      //   err.inner.code,
-      //   err.inner.expose,
-      //   typeof err.inner.expose
-      // );
+    log(
+      `Error executing ${err.serviceName}/${err.methodName}: ${err.inner.stack}`
+    );
+    if (!err.inner.type) {
       return res.status(400).json({
         message: err.inner.message,
         code: err.inner.code,

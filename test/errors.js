@@ -197,11 +197,57 @@ test("passes through @loke/errors serialized in full", async t => {
       body: {}
     })
   );
-  t.deepEqual(err.response.body, {
+
+  const bodyComp = Object.assign({}, err.response.body, {
+    instance: "removed"
+  });
+  t.deepEqual(bodyComp, {
+    instance: "removed",
     message: "LOKE Error",
     expose: true,
     code: "my_code",
     type: "my_code",
     something: "else"
   });
+});
+
+test("logs error stacktraces if not exposed", async t => {
+  let logged = "";
+  const log = str => {
+    logged += str;
+  };
+  const app = express();
+  function stack1() {
+    stack2();
+  }
+  function stack2() {
+    throw new Error("Stacked");
+  }
+  const service = {
+    stackError: () => {
+      stack1();
+    }
+  };
+  const meta = { expose: ["stackError"], service: "hello-service" };
+
+  app.use(
+    "/rpc",
+    bodyParser.json(),
+    inspect,
+    httpRpc.createRequestHandler(service, meta),
+    httpRpc.createErrorHandler({ log })
+  );
+
+  const serverAddress = createServerAddress(app);
+
+  await t.throws(
+    gotJsonPost(`${serverAddress}/rpc/stackError`, {
+      body: {}
+    })
+  );
+  t.true(
+    logged.startsWith(
+      "Error executing hello-service/stackError: Error: Stacked\n    at stack2"
+    )
+  );
 });
