@@ -100,12 +100,22 @@ exports.createErrorHandler = () => {
     }
 
     if (!(err.inner instanceof BaseError)) {
+      // console.log(
+      //   err.inner.message,
+      //   err.inner.code,
+      //   err.inner.expose,
+      //   typeof err.inner.expose
+      // );
       return res.status(400).json({
         message: err.inner.message,
-        code: err.inner.code
+        code: err.inner.code,
+        expose:
+          typeof err.inner.expose === "boolean"
+            ? err.inner.expose
+            : Boolean(err.inner.code) // for legacy errors, set expose only if there is a code
       });
     }
 
-    return res.status(400).json(err.inner.toJSON());
+    return res.status(400).json(err.inner);
   };
 };

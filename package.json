@@ -6,7 +6,7 @@
   "scripts": {
     "fix": "eslint . --fix",
     "lint": "eslint .",
-    "test": "ava"
+    "test": "ava -v"
   },
   "author": "Dominic Smith",
   "devDependencies": {
