@@ -1,6 +1,6 @@
 {
-  "name": "loke-http-rpc",
-  "version": "2.0.0",
+  "name": "@loke/http-rpc",
+  "version": "2.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -24,6 +24,7 @@
     "prom-client": "7.x"
   },
   "dependencies": {
+    "@loke/errors": "0.0.2",
     "p-finally": "^1.0.0",
     "p-tap": "^1.0.0"
   }
