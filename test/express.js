@@ -39,7 +39,7 @@ test("basic integration test", async t => {
     hello: x => `success ${x.msg}`
   };
   const meta = {
-    expose: ["hello"],
+    expose: [{ methodName: "hello" }],
     service: "hello-service"
   };
 

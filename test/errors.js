@@ -40,7 +40,7 @@ test("passes through messages", async t => {
     }
   };
   const meta = {
-    expose: ["basicError"],
+    expose: [{ methodName: "basicError" }],
     service: "hello-service"
   };
 
@@ -75,7 +75,7 @@ test("passes through codes if available and makes them exposed", async t => {
     }
   };
   const meta = {
-    expose: ["codeError"],
+    expose: [{ methodName: "codeError" }],
     service: "hello-service"
   };
 
@@ -110,7 +110,10 @@ test("passes through expose if available", async t => {
       throw err;
     }
   };
-  const meta = { expose: ["exposeError"], service: "hello-service" };
+  const meta = {
+    expose: [{ methodName: "exposeError" }],
+    service: "hello-service"
+  };
 
   app.use(
     "/rpc",
@@ -143,7 +146,10 @@ test("doesn't expose errors with code if expose = false", async t => {
       throw err;
     }
   };
-  const meta = { expose: ["notExposeError"], service: "hello-service" };
+  const meta = {
+    expose: [{ methodName: "notExposeError" }],
+    service: "hello-service"
+  };
 
   app.use(
     "/rpc",
@@ -180,7 +186,10 @@ test("passes through @loke/errors serialized in full", async t => {
       throw new CustomError(null, { something: "else" });
     }
   };
-  const meta = { expose: ["lokeError"], service: "hello-service" };
+  const meta = {
+    expose: [{ methodName: "lokeError" }],
+    service: "hello-service"
+  };
 
   app.use(
     "/rpc",
@@ -228,7 +237,10 @@ test("logs error stacktraces if not exposed", async t => {
       stack1();
     }
   };
-  const meta = { expose: ["stackError"], service: "hello-service" };
+  const meta = {
+    expose: [{ methodName: "stackError" }],
+    service: "hello-service"
+  };
 
   app.use(
     "/rpc",

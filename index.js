@@ -44,16 +44,33 @@ class RpcError extends ExtendableError {
 
 exports.createRequestHandler = (service, serviceDetails) => {
   const exposed = serviceDetails.expose;
+  const methods = exposed.map(m => m.methodName);
   const multiArg = serviceDetails.multiArg || serviceDetails.multArg || false;
   const serviceName = serviceDetails.service;
+  const serviceHelp = serviceDetails.help || serviceName + " service";
 
   const meta = {
     serviceName,
     multiArg,
-    interfaces: exposed.map(methodName => {
+    help: serviceHelp,
+    interfaces: exposed.map(method => {
+      if (typeof method === "string") {
+        throw new Error(
+          "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
+        );
+      }
+      const {
+        methodName,
+        methodTimeout = 60000,
+        help,
+        paramNames = []
+      } = method;
+
       return {
         methodName,
-        methodTimeout: 60000
+        paramNames,
+        methodTimeout,
+        help: help || methodName + " method"
       };
     })
   };
@@ -67,7 +84,7 @@ exports.createRequestHandler = (service, serviceDetails) => {
       return res.json(meta);
     }
 
-    if (req.method !== "POST" || exposed.indexOf(methodName) === -1) {
+    if (req.method !== "POST" || !methods.includes(methodName)) {
       return next();
     }
 
