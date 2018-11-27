@@ -10,7 +10,7 @@
   },
   "author": "Dominic Smith",
   "devDependencies": {
-    "@loke/errors": "0.1.0",
+    "@loke/errors": "0.2.1",
     "@loke/ipc": "^1.1.0",
     "ava": "^0.15.2",
     "body-parser": "^1.15.2",
