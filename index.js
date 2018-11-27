@@ -84,6 +84,10 @@ exports.createRequestHandler = (service, serviceDetails) => {
       return res.json(meta);
     }
 
+    if (req.method === "GET" && methods.includes(methodName)) {
+      return res.json(meta.interfaces.find(i => i.methodName === methodName));
+    }
+
     if (req.method !== "POST" || !methods.includes(methodName)) {
       return next();
     }
