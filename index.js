@@ -1,4 +1,3 @@
-const pTap = require("p-tap");
 const pFinally = require("p-finally");
 const { Histogram, Counter } = require("prom-client");
 
@@ -15,7 +14,7 @@ const requestCount = new Counter({
 const failureCount = new Counter({
   name: "http_rpc_failures_total",
   help: "The total number of rpc failures received",
-  labelNames: ["handler"]
+  labelNames: ["handler", "type"]
 });
 
 class ExtendableError extends Error {
@@ -107,8 +106,8 @@ exports.createRequestHandler = (service, serviceDetails) => {
     const result = Promise.resolve()
       .then(() => service[methodName].apply(service, args))
       .then(result => res.json(result))
-      .catch(pTap.catch(() => failureCount.inc(requestMeta)))
       .catch(err => {
+        failureCount.inc(Object.assign({ type: err.type }, requestMeta));
         next(new RpcError(serviceName, methodName, err));
       });
 
@@ -120,21 +119,22 @@ exports.createErrorHandler = (args = {}) => {
   const { log = () => {} } = args;
   // eslint-disable-next-line no-unused-vars
   return (err, req, res, next) => {
+    const source = `${err.serviceName}/${err.methodName}`;
     if (!(err instanceof RpcError)) {
+      log(`Internal error executing ${source}: ${err.stack || err.message}`);
       return res.status(500).json({ message: err.message });
     }
 
-    log(
-      `Error executing ${err.serviceName}/${err.methodName}: ${err.inner.stack}`
-    );
+    log(`Error executing ${source}: ${err.inner.stack}`);
     if (!err.inner.type) {
+      log(
+        `Legacy error returned from ${source}: name=${err.inner.name}, code=${
+          err.inner.code
+        }`
+      );
       return res.status(400).json({
         message: err.inner.message,
-        code: err.inner.code,
-        expose:
-          typeof err.inner.expose === "boolean"
-            ? err.inner.expose
-            : Boolean(err.inner.code) // for legacy errors, set expose only if there is a code
+        code: err.inner.code
       });
     }
 

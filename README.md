@@ -1,25 +1,43 @@
 # loke-http-rpc
 
 ```js
-const lokeHttpRpc = require('loke-http-rpc');
+const lokeHttpRpc = require("loke-http-rpc");
 
 const myService = {
-  doStuff() {
-    return Promise.resolve('stuff done');
+  async doStuff() {
+    return await Promise.resolve("stuff done");
+  },
+  moreStuff(stuffs) {
+    return "you wanted " + stuffs;
   }
 };
 
 const MY_SERVICE_META = {
-  service: 'my-service', // display name
+  service: "my-service", // display name
+  help: "Documentation goes here",
   multiArg: false, // defaults to false. If true accepts an array for arguments, if false an array will be assumed to be the first (and only) argument.
-  expose: [  // The methods to be exposed publically
-    'doStuff'
+  expose: [
+    // The methods to be exposed publicly
+    // BREAKING CHANGE: expose now requires an object
+    { methodName: "doStuff" },
+    {
+      methodName: "moreStuff",
+      methodTimeout: 15000,
+      paramNames: ["stuffs"],
+      help: "This is a silly method"
+    }
   ]
 };
 
-const myRpcService = lokeHttpRpc.createRequestHandler(myService, MY_SERVICE_META);
+const myRpcService = lokeHttpRpc.createRequestHandler(
+  myService,
+  MY_SERVICE_META
+);
 
-app.use('/rpc', myRpcService);
+const errorLogger = msg => console.log(msg);
+
+app.use("/rpc", myRpcService);
+app.use(lokeHttpRpc.createErrorHandler({ log: errorLogger }));
 ```
 
 Then, if running on port 5000:

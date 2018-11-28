@@ -1,6 +1,6 @@
 {
   "name": "@loke/http-rpc",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -11,7 +11,6 @@
   "author": "Dominic Smith",
   "devDependencies": {
     "@loke/errors": "0.2.1",
-    "@loke/ipc": "^1.1.0",
     "ava": "^0.15.2",
     "body-parser": "^1.15.2",
     "eslint": "^5.9.0",
@@ -23,10 +22,9 @@
     "prom-client": "^11.2.0"
   },
   "peerDependencies": {
-    "prom-client": "7.x"
+    "prom-client": "11.x"
   },
   "dependencies": {
-    "p-finally": "^1.0.0",
-    "p-tap": "^1.0.0"
+    "p-finally": "^1.0.0"
   }
 }

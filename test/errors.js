@@ -60,8 +60,7 @@ test("passes through messages", async t => {
     })
   );
   t.deepEqual(err.response.body, {
-    message: "This is a basic error",
-    expose: false
+    message: "This is a basic error"
   });
 });
 
@@ -96,22 +95,25 @@ test("passes through codes if available and makes them exposed", async t => {
   );
   t.deepEqual(err.response.body, {
     message: "This is a code error",
-    code: "CODE_ERROR",
-    expose: true
+    code: "CODE_ERROR"
   });
 });
 
-test("passes through expose if available", async t => {
+test("passes through expose if available on a @loke/errors type", async t => {
   const app = express();
+  const CustomError = createErrorType({
+    message: "LOKE Error",
+    code: "my_code",
+    help: "Some help",
+    expose: true
+  });
   const service = {
-    exposeError: () => {
-      const err = new Error("This is an exposed error");
-      err.expose = true;
-      throw err;
+    lokeError: () => {
+      throw new CustomError();
     }
   };
   const meta = {
-    expose: [{ methodName: "exposeError" }],
+    expose: [{ methodName: "lokeError" }],
     service: "hello-service"
   };
 
@@ -126,50 +128,20 @@ test("passes through expose if available", async t => {
   const serverAddress = createServerAddress(app);
 
   const err = await t.throws(
-    gotJsonPost(`${serverAddress}/rpc/exposeError`, {
+    gotJsonPost(`${serverAddress}/rpc/lokeError`, {
       body: {}
     })
   );
-  t.deepEqual(err.response.body, {
-    message: "This is an exposed error",
-    expose: true
+
+  const bodyComp = Object.assign({}, err.response.body, {
+    instance: "removed"
   });
-});
-
-test("doesn't expose errors with code if expose = false", async t => {
-  const app = express();
-  const service = {
-    notExposeError: () => {
-      const err = new Error("This is a not exposed error");
-      err.code = "NOT_EXPOSED";
-      err.expose = false;
-      throw err;
-    }
-  };
-  const meta = {
-    expose: [{ methodName: "notExposeError" }],
-    service: "hello-service"
-  };
-
-  app.use(
-    "/rpc",
-    bodyParser.json(),
-    inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
-  );
-
-  const serverAddress = createServerAddress(app);
-
-  const err = await t.throws(
-    gotJsonPost(`${serverAddress}/rpc/notExposeError`, {
-      body: {}
-    })
-  );
-  t.deepEqual(err.response.body, {
-    message: "This is a not exposed error",
-    code: "NOT_EXPOSED",
-    expose: false
+  t.deepEqual(bodyComp, {
+    instance: "removed",
+    message: "LOKE Error",
+    expose: true,
+    code: "my_code",
+    type: "my_code"
   });
 });
 
@@ -178,7 +150,6 @@ test("passes through @loke/errors serialized in full", async t => {
   const CustomError = createErrorType({
     message: "LOKE Error",
     code: "my_code",
-    expose: true,
     help: "Some help"
   });
   const service = {
@@ -213,7 +184,6 @@ test("passes through @loke/errors serialized in full", async t => {
   t.deepEqual(bodyComp, {
     instance: "removed",
     message: "LOKE Error",
-    expose: true,
     code: "my_code",
     type: "my_code",
     something: "else"
