@@ -98,18 +98,18 @@ exports.createErrorHandler = (args = {}) => {
   const { log = () => {} } = args;
   // eslint-disable-next-line no-unused-vars
   return (err, req, res, next) => {
+    const source = `${err.serviceName}/${err.methodName}`;
     if (!(err instanceof RpcError)) {
+      log(`Internal error executing ${source}: ${err.stack || err.message}`);
       return res.status(500).json({ message: err.message });
     }
 
-    log(
-      `Error executing ${err.serviceName}/${err.methodName}: ${err.inner.stack}`
-    );
+    log(`Error executing ${source}: ${err.inner.stack}`);
     if (!err.inner.type) {
       log(
-        `Legacy error returned from ${err.serviceName}/${
-          err.methodName
-        }: name=${err.inner.name}, code=${err.inner.code}`
+        `Legacy error returned from ${source}: name=${err.inner.name}, code=${
+          err.inner.code
+        }`
       );
       return res.status(400).json({
         message: err.inner.message,
