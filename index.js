@@ -1,22 +1,21 @@
-const pTap = require("p-tap");
 const pFinally = require("p-finally");
 const { Histogram, Counter } = require("prom-client");
 
-const requestDuration = new Histogram(
-  "http_rpc_request_duration_seconds",
-  "Duration of rpc requests",
-  ["handler"]
-);
-const requestCount = new Counter(
-  "http_rpc_requests_total",
-  "The total number of rpc requests received",
-  ["handler"]
-);
-const failureCount = new Counter(
-  "http_rpc_failures_total",
-  "The total number of rpc failures received",
-  ["handler"]
-);
+const requestDuration = new Histogram({
+  name: "http_rpc_request_duration_seconds",
+  help: "Duration of rpc requests",
+  labelNames: ["handler"]
+});
+const requestCount = new Counter({
+  name: "http_rpc_requests_total",
+  help: "The total number of rpc requests received",
+  labelNames: ["handler"]
+});
+const failureCount = new Counter({
+  name: "http_rpc_failures_total",
+  help: "The total number of rpc failures received",
+  labelNames: ["handler", "type"]
+});
 
 class ExtendableError extends Error {
   constructor(message) {
@@ -32,8 +31,12 @@ class ExtendableError extends Error {
 }
 
 class RpcError extends ExtendableError {
-  constructor(methodName, inner) {
-    super(`An error occurred while executing method ${methodName}`);
+  constructor(serviceName, methodName, inner) {
+    super(
+      `An error occurred while executing method ${serviceName}/${methodName}`
+    );
+    this.serviceName = serviceName;
+    this.methodName = methodName;
     this.inner = inner;
   }
 }
@@ -82,27 +85,38 @@ exports.createRequestHandler = (service, serviceDetails) => {
     const result = Promise.resolve()
       .then(() => service[methodName].apply(service, args))
       .then(result => res.json(result))
-      .catch(pTap.catch(() => failureCount.inc(requestMeta)))
       .catch(err => {
-        next(new RpcError(methodName, err));
+        failureCount.inc(Object.assign({ type: err.type }, requestMeta));
+        next(new RpcError(serviceName, methodName, err));
       });
 
     return pFinally(result, end);
   };
 };
 
-exports.createErrorHandler = () => {
+exports.createErrorHandler = (args = {}) => {
+  const { log = () => {} } = args;
   // eslint-disable-next-line no-unused-vars
   return (err, req, res, next) => {
-    if (err instanceof RpcError) {
-      res.status(400).json({
+    const source = `${err.serviceName}/${err.methodName}`;
+    if (!(err instanceof RpcError)) {
+      log(`Internal error executing ${source}: ${err.stack || err.message}`);
+      return res.status(500).json({ message: err.message });
+    }
+
+    log(`Error executing ${source}: ${err.inner.stack}`);
+    if (!err.inner.type) {
+      log(
+        `Legacy error returned from ${source}: name=${err.inner.name}, code=${
+          err.inner.code
+        }`
+      );
+      return res.status(400).json({
         message: err.inner.message,
         code: err.inner.code
       });
-    } else {
-      res.status(500).json({
-        message: err.message
-      });
     }
+
+    return res.status(400).json(err.inner);
   };
 };

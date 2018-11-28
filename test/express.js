@@ -13,14 +13,14 @@ function gotJsonPost(url, options) {
     body: options.body && JSON.stringify(options.body)
   };
 
-  console.log(jsonOptions); // eslint-disable-line no-console
+  // console.log(jsonOptions); // eslint-disable-line no-console
 
   return got.post(url, jsonOptions);
 }
 
 const inspect = (req, res, next) => {
   next();
-  console.log(req.body, req.headers); // eslint-disable-line no-console
+  // console.log(req.body, req.headers); // eslint-disable-line no-console
 };
 
 function createServerAddress(app) {
@@ -33,7 +33,7 @@ function createServerAddress(app) {
   return `localhost:${port}`;
 }
 
-test(async t => {
+test("basic integration test", async t => {
   const app = express();
   const service = {
     hello: x => `success ${x.msg}`
