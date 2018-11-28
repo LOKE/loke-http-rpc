@@ -1,12 +1,12 @@
 language: node_js
 node_js:
-- '6'
-- lts/*
+  - "6"
+  - lts/*
 deploy:
   provider: npm
   email: npm@loke.com.au
-  api_key:
-    secure: q4dV8wN5um9FIDJErKKj1o7oLMhmZ0AWc4axQhYyBnOBLKw8Gfr3XoGv8argbqXJhoAhUSrPicHXU/Myjo3SEJO2eZqV2zbNckNsuQoLuH/8lvJG+oEYOvvCePm246i7pDrHt+SAkJ5VWAVcuBz5OHWsE0D36u4/AEa7fWkIGyuQW/jJ6G7olH/iBCZNQ/KXsvE9/kGiKaL43r7bx22AdLkHxoBZ3j76iFRpdLgN/butp33Ph/JCZ42fSaAhBHaHuJyTfkxXbzyvy8wusQFqnlhUnvZ0idHgd0lDSG//y7WQa9qwjpgumg5VTlGWMHRhSFyrssKZMQn0GY84UBJunnKu46nKtfuX+zxSOwYmOQM55uwcT1U3fbrhlwKzSmf3O4FsfdIBH/xJeOMI2Ahm4hv5N8q/H2NUd128rcsXOtzcfMVnzbfMnI0uS1S8NgYVWo8iFD/G1ZhzZFFsg1Hls1SvLNplaFMAMo5bEQjMB1tGnoMIb0/4fjNo+w3Mjm6Qu9CZZTySYiAktba+MZOBRf3ZwQ4KuGf/fwodqDXoHhEqMt2UVSyKkjBIM9Gqr5iuZxEqFrcunaUZbBZL5htG3QbAL5cTms8gIyNOmefq+L0+wUN3F5+Li+wCLC/RoUdF6opFzsdDJ6rIDq3WBboLx5MlwTuFEFBHqd0ir/aVl2A=
   on:
     tags: true
     repo: LOKE/loke-http-rpc
+  api_key:
+    secure: nNxVhGFIbNw8vDwVw6RNMNQbvTDRXtgFKDH918vZV8cdVoZaskgRTCyadduFOPPWPws+gYJFUsj9O4/6SVTpuBiR9vSkPk/Vftm+xO4a05EYeh3OBY9ixjv8mRqMkYrUCFtDTMp+x+fdhfeweVsFNwK1d71nNQD4OV3e0SK0Bm+b5XOvvraF5JS8r6jtm5z4w2mnRW1GBQ8fem4zXxmq8vYgsoSisvHEsFiSgkqqXgYhTISlMOZuDGfP4h0liz/08pADhlF8ydGOXAtoPQaCncWG37Ob/MFgJt2JrtbdcZBwfTFgNj3C+RKpaZshe1qYp7MckDmrV3j4XMrri3JDf4ymJvApGJbKc7eTi/FJ87MGAD2BnXHEs0hAkfRcIwk+5thVtf+1Y3qNxKvWsYYYhbfd2KBaB8CK1OqpjCL8k3BECFzuMnOWxR0K63ZKoz08iHA/n5S8CfuifoOAEFvsPrqhchbKfxUO+TK0lvAQIOizEsi0IQAoQvXH/+hwu/jmlgWefzEWVWoZNETgvQiwE9J9Lt1cr8MySqJADZtQwEf+wNfrTmrL+ikP6KSr10FmbWsQ7D5pj5yawQ24b6aBkbwLzCW2GsiA/NHwhRkxGCGXYm3lyZm4So2pJyDOQ3OM06DRxCfreR+znUXJM745pZ2grC2xaz7EA+P/ftM7F8U=
