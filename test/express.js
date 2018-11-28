@@ -39,7 +39,7 @@ test("basic integration test", async t => {
     hello: x => `success ${x.msg}`
   };
   const meta = {
-    expose: ["hello"],
+    expose: [{ methodName: "hello" }],
     service: "hello-service"
   };
 
@@ -58,4 +58,61 @@ test("basic integration test", async t => {
   t.is(response.body, "success world");
 
   t.throws(gotJsonPost(`${serverAddress}/rpc/missing`, {}));
+});
+
+test("metadata and documentation", async t => {
+  const app = express();
+  const service = { hello: x => `success ${x.msg}` };
+  const meta = {
+    expose: [
+      {
+        methodName: "hello",
+        methodTimeout: 15000,
+        paramNames: ["greeting"],
+        help: `This is a simple method.
+It just returns success.`
+      }
+    ],
+    service: "hello-service",
+    help: `This is the help for the service.
+Can include **Markdown**.`
+  };
+
+  app.use(
+    "/rpc",
+    bodyParser.json(),
+    inspect,
+    httpRpc.createRequestHandler(service, meta)
+  );
+
+  const serverAddress = createServerAddress(app);
+
+  // All service metadata
+  const allMeta = (await got(`${serverAddress}/rpc`, {
+    json: true
+  })).body;
+  t.deepEqual(allMeta, {
+    serviceName: "hello-service",
+    multiArg: false,
+    help: "This is the help for the service.\nCan include **Markdown**.",
+    interfaces: [
+      {
+        methodName: "hello",
+        paramNames: ["greeting"],
+        methodTimeout: 15000,
+        help: "This is a simple method.\nIt just returns success."
+      }
+    ]
+  });
+
+  // Method metadata
+  const singleMeta = (await got(`${serverAddress}/rpc/hello`, {
+    json: true
+  })).body;
+  t.deepEqual(singleMeta, {
+    methodName: "hello",
+    paramNames: ["greeting"],
+    methodTimeout: 15000,
+    help: "This is a simple method.\nIt just returns success."
+  });
 });
