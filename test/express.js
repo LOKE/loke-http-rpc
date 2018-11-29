@@ -68,7 +68,11 @@ test("metadata and documentation", async t => {
       {
         methodName: "hello",
         methodTimeout: 15000,
-        paramNames: ["greeting"],
+        params: [
+          { paramName: "greeting", paramType: "string" },
+          { paramName: "handshake", paramType: "boolean" }
+        ],
+        returnType: "boolean",
         help: `This is a simple method.
 It just returns success.`
       }
@@ -98,7 +102,12 @@ Can include **Markdown**.`
     interfaces: [
       {
         methodName: "hello",
-        paramNames: ["greeting"],
+        params: [
+          { paramName: "greeting", paramType: "string" },
+          { paramName: "handshake", paramType: "boolean" }
+        ],
+        paramNames: ["greeting", "handshake"],
+        returnType: "boolean",
         methodTimeout: 15000,
         help: "This is a simple method.\nIt just returns success."
       }
@@ -111,7 +120,12 @@ Can include **Markdown**.`
   })).body;
   t.deepEqual(singleMeta, {
     methodName: "hello",
-    paramNames: ["greeting"],
+    params: [
+      { paramName: "greeting", paramType: "string" },
+      { paramName: "handshake", paramType: "boolean" }
+    ],
+    paramNames: ["greeting", "handshake"],
+    returnType: "boolean",
     methodTimeout: 15000,
     help: "This is a simple method.\nIt just returns success."
   });

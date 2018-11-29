@@ -62,12 +62,18 @@ exports.createRequestHandler = (service, serviceDetails) => {
         methodName,
         methodTimeout = 60000,
         help,
-        paramNames = []
+        params = [],
+        returnType
       } = method;
+
+      // param names required for backwards compat
+      const paramNames = params.map(p => p.paramName);
 
       return {
         methodName,
         paramNames,
+        params,
+        returnType,
         methodTimeout,
         help: help || methodName + " method"
       };

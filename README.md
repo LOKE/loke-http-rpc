@@ -23,8 +23,9 @@ const MY_SERVICE_META = {
     {
       methodName: "moreStuff",
       methodTimeout: 15000,
-      paramNames: ["stuffs"],
-      help: "This is a silly method"
+      params: [{ paramName: "stuffs", paramType: "integer" }],
+      help: "This is a silly method",
+      returnType: "string"
     }
   ]
 };
