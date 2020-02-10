@@ -1,10 +1,10 @@
-import test from "ava";
-import http from "http";
-import express from "express";
-import bodyParser from "body-parser";
-import got from "got";
-import httpRpc from "..";
-import { createErrorType } from "@loke/errors";
+const test = require("ava");
+const http = require("http");
+const express = require("express");
+const bodyParser = require("body-parser");
+const got = require("got");
+const httpRpc = require("..");
+const { createErrorType } = require("@loke/errors");
 
 function gotJsonPost(url, options) {
   const jsonOptions = {
@@ -54,7 +54,7 @@ test("passes through messages", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
+  const err = await t.throwsAsync(() =>
     gotJsonPost(`${serverAddress}/rpc/basicError`, {
       body: {}
     })
@@ -88,7 +88,7 @@ test("passes through codes if available and makes them exposed", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
+  const err = await t.throwsAsync(() =>
     gotJsonPost(`${serverAddress}/rpc/codeError`, {
       body: {}
     })
@@ -127,7 +127,7 @@ test("passes through expose if available on a @loke/errors type", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
+  const err = await t.throwsAsync(() =>
     gotJsonPost(`${serverAddress}/rpc/lokeError`, {
       body: {}
     })
@@ -172,7 +172,7 @@ test("passes through @loke/errors serialized in full", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
+  const err = await t.throwsAsync(() =>
     gotJsonPost(`${serverAddress}/rpc/lokeError`, {
       body: {}
     })
@@ -222,7 +222,7 @@ test("logs error stacktraces if not exposed", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  await t.throws(
+  await t.throwsAsync(() =>
     gotJsonPost(`${serverAddress}/rpc/stackError`, {
       body: {}
     })

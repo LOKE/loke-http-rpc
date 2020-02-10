@@ -11,7 +11,7 @@
   "author": "Dominic Smith",
   "devDependencies": {
     "@loke/errors": "0.2.1",
-    "ava": "^0.15.2",
+    "ava": "^3.3.0",
     "body-parser": "^1.15.2",
     "eslint": "^5.9.0",
     "eslint-config-prettier": "^3.3.0",
@@ -25,6 +25,7 @@
     "prom-client": "11.x"
   },
   "dependencies": {
+    "json-schema-to-typescript": "^8.0.1",
     "p-finally": "^1.0.0"
   }
 }

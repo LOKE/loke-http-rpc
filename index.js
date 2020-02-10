@@ -62,12 +62,20 @@ exports.createRequestHandler = (service, serviceDetails) => {
         methodName,
         methodTimeout = 60000,
         help,
-        paramNames = []
+        paramNames: _paramNames,
+        params = []
       } = method;
+
+      if (_paramNames) {
+        throw new Error("paramNames is deprecated. Please use params.");
+      }
+
+      const paramNames = params.map(p => p.name);
 
       return {
         methodName,
         paramNames,
+        params,
         methodTimeout,
         help: help || methodName + " method"
       };
@@ -79,12 +87,18 @@ exports.createRequestHandler = (service, serviceDetails) => {
     const body = req.body;
     const args = multiArg ? body : [body];
 
-    if (req.method === "GET" && req.path === "/") {
-      return res.json(meta);
-    }
+    if (req.method === "GET") {
+      if (req.path === "/") {
+        return res.json(meta);
+      }
 
-    if (req.method === "GET" && methods.includes(methodName)) {
-      return res.json(meta.interfaces.find(i => i.methodName === methodName));
+      if (req.path === "/.tsd") {
+        return res.json(meta);
+      }
+
+      if (methods.includes(methodName)) {
+        return res.json(meta.interfaces.find(i => i.methodName === methodName));
+      }
     }
 
     if (req.method !== "POST" || !methods.includes(methodName)) {
@@ -141,3 +155,7 @@ exports.createErrorHandler = (args = {}) => {
     return res.status(400).json(err.inner);
   };
 };
+
+function interfaceFromSchema(jsonSchema) {}
+
+function typeDefFromMeta(meta) {}
