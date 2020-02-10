@@ -1,5 +1,7 @@
 const pFinally = require("p-finally");
 const { Histogram, Counter } = require("prom-client");
+const { compile } = require("json-schema-to-typescript");
+const { pascalize } = require("humps");
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -63,7 +65,8 @@ exports.createRequestHandler = (service, serviceDetails) => {
         methodTimeout = 60000,
         help,
         paramNames: _paramNames,
-        params = []
+        params = [],
+        returnType = "any"
       } = method;
 
       if (_paramNames) {
@@ -76,10 +79,12 @@ exports.createRequestHandler = (service, serviceDetails) => {
         methodName,
         paramNames,
         params,
+        returnType,
         methodTimeout,
         help: help || methodName + " method"
       };
-    })
+    }),
+    schemas: serviceDetails.schemas
   };
 
   return (req, res, next) => {
@@ -93,7 +98,7 @@ exports.createRequestHandler = (service, serviceDetails) => {
       }
 
       if (req.path === "/.tsd") {
-        return res.json(meta);
+        return typeDefFromMeta(meta).then(typedef => res.send(typedef));
       }
 
       if (methods.includes(methodName)) {
@@ -156,6 +161,24 @@ exports.createErrorHandler = (args = {}) => {
   };
 };
 
-function interfaceFromSchema(jsonSchema) {}
-
-function typeDefFromMeta(meta) {}
+function typeDefFromMeta(meta) {
+  return Promise.all(
+    meta.schemas.map(s => compile(s, s.title, { bannerComment: "" }))
+  ).then(types => {
+    const service = `
+    /** ${meta.help} */
+    export interface ${pascalize(meta.serviceName)} {
+      ${meta.interfaces.map(i => {
+        return `
+        /** ${i.help} */
+        ${i.methodName}(${i.params
+          .map(p => `${p.name}: ${p.type || "any"}`)
+          .join(", ")}): Promise<${i.returnType}>
+        `;
+      })}
+    }
+    `;
+    const typedef = [`namespace loke.rpc {`, ...types, service, "}"];
+    return typedef.join("\n");
+  });
+}

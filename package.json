@@ -25,6 +25,7 @@
     "prom-client": "11.x"
   },
   "dependencies": {
+    "humps": "^2.0.1",
     "json-schema-to-typescript": "^8.0.1",
     "p-finally": "^1.0.0"
   }

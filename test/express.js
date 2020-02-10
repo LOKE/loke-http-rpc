@@ -119,7 +119,7 @@ Can include **Markdown**.`
   });
 });
 
-test.skip("param schemas", async t => {
+test.only("param schemas", async t => {
   const app = express();
   const service = { hello: x => `success ${x.msg}` };
   const meta = {
@@ -127,28 +127,41 @@ test.skip("param schemas", async t => {
       {
         methodName: "hello",
         methodTimeout: 15000,
-        params: [{ name: "greeting", type: "greeting" }],
+        params: [{ name: "greeting", type: "Greeting" }],
+        returnType: "GizmosArray",
         help: `This is a simple method.
 It just returns success.`
       }
     ],
     service: "hello-service",
-    schemas: {
-      greeting: {
+    schemas: [
+      {
         type: "object",
         required: ["message"],
-        title: "Hi ho",
+        title: "Greeting",
         properties: {
           message: {
             type: "string",
-            title: "The Message Schema",
+            title: "GreetingMessage",
             default: "",
             examples: ["hello"],
             pattern: "^(.*)$"
           }
+        },
+        additionalProperties: false
+      },
+      {
+        type: "array",
+        title: "GizmosArray",
+        items: {
+          type: "string",
+          title: "Gizmo",
+          default: "",
+          examples: ["one", "two"],
+          pattern: "^(.*)$"
         }
       }
-    },
+    ],
     help: `This is the help for the service.
 Can include **Markdown**.`
   };
@@ -163,31 +176,52 @@ Can include **Markdown**.`
   const serverAddress = createServerAddress(app);
 
   // All service metadata
-  const allMeta = (await got(`${serverAddress}/rpc`, {
-    json: true
-  })).body;
-  t.deepEqual(allMeta, {
-    serviceName: "hello-service",
-    multiArg: false,
-    help: "This is the help for the service.\nCan include **Markdown**.",
-    interfaces: [
-      {
-        methodName: "hello",
-        paramNames: ["greeting"],
-        methodTimeout: 15000,
-        help: "This is a simple method.\nIt just returns success."
-      }
-    ]
-  });
+  // const allMeta = (await got(`${serverAddress}/rpc`, {
+  //   json: true
+  // })).body;
+  // t.deepEqual(allMeta, {
+  //   serviceName: "hello-service",
+  //   multiArg: false,
+  //   help: "This is the help for the service.\nCan include **Markdown**.",
+  //   interfaces: [
+  //     {
+  //       methodName: "hello",
+  //       paramNames: ["greeting"],
+  //       params: [{ name: "greeting", type: "greeting" }],
+  //       methodTimeout: 15000,
+  //       help: "This is a simple method.\nIt just returns success."
+  //     }
+  //   ],
+  //   schemas: [
+  //     {
+  //       properties: {
+  //         message: {
+  //           default: "",
+  //           examples: ["hello"],
+  //           pattern: "^(.*)$",
+  //           type: "string"
+  //         }
+  //       },
+  //       required: ["message"],
+  //       title: "Greeting",
+  //       type: "object"
+  //     }
+  //   ]
+  // });
 
   // Method metadata
-  const singleMeta = (await got(`${serverAddress}/rpc/hello`, {
-    json: true
-  })).body;
-  t.deepEqual(singleMeta, {
-    methodName: "hello",
-    paramNames: ["greeting"],
-    methodTimeout: 15000,
-    help: "This is a simple method.\nIt just returns success."
-  });
+  // const singleMeta = (await got(`${serverAddress}/rpc/hello`, {
+  //   json: true
+  // })).body;
+  // t.deepEqual(singleMeta, {
+  //   methodName: "hello",
+  //   paramNames: ["greeting"],
+  //   params: [{ name: "greeting", type: "greeting" }],
+  //   methodTimeout: 15000,
+  //   help: "This is a simple method.\nIt just returns success."
+  // });
+
+  // .tsd
+  const tsdMeta = (await got(`${serverAddress}/rpc/.tsd`, {})).body;
+  t.deepEqual(tsdMeta, "");
 });
