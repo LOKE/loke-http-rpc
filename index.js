@@ -166,18 +166,18 @@ function typeDefFromMeta(meta) {
     meta.schemas.map(s => compile(s, s.title, { bannerComment: "" }))
   ).then(types => {
     const service = `
-    /** ${meta.help} */
-    export interface ${pascalize(meta.serviceName)} {
-      ${meta.interfaces.map(i => {
-        return `
-        /** ${i.help} */
-        ${i.methodName}(${i.params
-          .map(p => `${p.name}: ${p.type || "any"}`)
-          .join(", ")}): Promise<${i.returnType}>
-        `;
-      })}
-    }
-    `;
+/** ${meta.help} */
+export interface ${pascalize(meta.serviceName)} {
+${meta.interfaces.map(i => {
+      return `
+  /** ${i.help} */
+  ${i.methodName}(${i.params
+        .map(p => `${p.name}: ${p.type || "any"}`)
+        .join(", ")}): Promise<${i.returnType}>
+`;
+    })}
+}
+`;
     const typedef = [`namespace loke.rpc {`, ...types, service, "}"];
     return typedef.join("\n");
   });

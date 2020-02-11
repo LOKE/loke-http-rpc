@@ -175,53 +175,30 @@ Can include **Markdown**.`
 
   const serverAddress = createServerAddress(app);
 
-  // All service metadata
-  // const allMeta = (await got(`${serverAddress}/rpc`, {
-  //   json: true
-  // })).body;
-  // t.deepEqual(allMeta, {
-  //   serviceName: "hello-service",
-  //   multiArg: false,
-  //   help: "This is the help for the service.\nCan include **Markdown**.",
-  //   interfaces: [
-  //     {
-  //       methodName: "hello",
-  //       paramNames: ["greeting"],
-  //       params: [{ name: "greeting", type: "greeting" }],
-  //       methodTimeout: 15000,
-  //       help: "This is a simple method.\nIt just returns success."
-  //     }
-  //   ],
-  //   schemas: [
-  //     {
-  //       properties: {
-  //         message: {
-  //           default: "",
-  //           examples: ["hello"],
-  //           pattern: "^(.*)$",
-  //           type: "string"
-  //         }
-  //       },
-  //       required: ["message"],
-  //       title: "Greeting",
-  //       type: "object"
-  //     }
-  //   ]
-  // });
-
-  // Method metadata
-  // const singleMeta = (await got(`${serverAddress}/rpc/hello`, {
-  //   json: true
-  // })).body;
-  // t.deepEqual(singleMeta, {
-  //   methodName: "hello",
-  //   paramNames: ["greeting"],
-  //   params: [{ name: "greeting", type: "greeting" }],
-  //   methodTimeout: 15000,
-  //   help: "This is a simple method.\nIt just returns success."
-  // });
-
-  // .tsd
   const tsdMeta = (await got(`${serverAddress}/rpc/.tsd`, {})).body;
-  t.deepEqual(tsdMeta, "");
+  t.deepEqual(
+    tsdMeta,
+    `namespace loke.rpc {
+export type GreetingMessage = string;
+
+export interface Greeting {
+  message: GreetingMessage;
+}
+
+export type Gizmo = string;
+export type GizmosArray = Gizmo[];
+
+
+/** This is the help for the service.
+Can include **Markdown**. */
+export interface HelloService {
+
+  /** This is a simple method.
+It just returns success. */
+  hello(greeting: Greeting): Promise<GizmosArray>
+
+}
+
+}`
+  );
 });
