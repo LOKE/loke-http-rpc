@@ -1,7 +1,5 @@
 const pFinally = require("p-finally");
 const { Histogram, Counter } = require("prom-client");
-const { compile } = require("json-schema-to-typescript");
-const { pascalize } = require("humps");
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -97,10 +95,6 @@ exports.createRequestHandler = (service, serviceDetails) => {
         return res.json(meta);
       }
 
-      if (req.path === "/.tsd") {
-        return typeDefFromMeta(meta).then(typedef => res.send(typedef));
-      }
-
       if (methods.includes(methodName)) {
         return res.json(meta.interfaces.find(i => i.methodName === methodName));
       }
@@ -160,25 +154,3 @@ exports.createErrorHandler = (args = {}) => {
     return res.status(400).json(err.inner);
   };
 };
-
-function typeDefFromMeta(meta) {
-  return Promise.all(
-    meta.schemas.map(s => compile(s, s.title, { bannerComment: "" }))
-  ).then(types => {
-    const service = `
-/** ${meta.help} */
-export interface ${pascalize(meta.serviceName)} {
-${meta.interfaces.map(i => {
-      return `
-  /** ${i.help} */
-  ${i.methodName}(${i.params
-        .map(p => `${p.name}: ${p.type || "any"}`)
-        .join(", ")}): Promise<${i.returnType}>
-`;
-    })}
-}
-`;
-    const typedef = [`namespace loke.rpc {`, ...types, service, "}"];
-    return typedef.join("\n");
-  });
-}

@@ -119,7 +119,7 @@ Can include **Markdown**.`
   });
 });
 
-test.only("param schemas", async t => {
+test("param schemas are returned if available", async t => {
   const app = express();
   const service = { hello: x => `success ${x.msg}` };
   const meta = {
@@ -130,7 +130,114 @@ test.only("param schemas", async t => {
         params: [{ name: "greeting", type: "Greeting" }],
         returnType: "GizmosArray",
         help: `This is a simple method.
-It just returns success.`
+It returns gizmos.`
+      }
+    ],
+    service: "hello-service",
+    schemas: [
+      {
+        type: "object",
+        required: ["message"],
+        title: "Greeting",
+        properties: {
+          message: {
+            type: "string",
+            title: "GreetingMessage",
+            default: "",
+            examples: ["hello"],
+            pattern: "^(.*)$"
+          }
+        },
+        additionalProperties: false
+      },
+      {
+        type: "array",
+        title: "GizmosArray",
+        items: {
+          type: "string",
+          title: "Gizmo",
+          default: "",
+          examples: ["one", "two"],
+          pattern: "^(.*)$"
+        }
+      }
+    ],
+    help: `This is the help for the service.
+Can include **Markdown**.`
+  };
+
+  app.use(
+    "/rpc",
+    bodyParser.json(),
+    inspect,
+    httpRpc.createRequestHandler(service, meta)
+  );
+
+  const serverAddress = createServerAddress(app);
+
+  const rpcMeta = (await got(`${serverAddress}/rpc`, { json: true })).body;
+  t.deepEqual(rpcMeta, {
+    help: `This is the help for the service.\nCan include **Markdown**.`,
+    interfaces: [
+      {
+        help: `This is a simple method.\nIt returns gizmos.`,
+        methodName: "hello",
+        methodTimeout: 15000,
+        paramNames: ["greeting"],
+        params: [
+          {
+            name: "greeting",
+            type: "Greeting"
+          }
+        ],
+        returnType: "GizmosArray"
+      }
+    ],
+    multiArg: false,
+    schemas: [
+      {
+        type: "object",
+        required: ["message"],
+        title: "Greeting",
+        properties: {
+          message: {
+            type: "string",
+            title: "GreetingMessage",
+            default: "",
+            examples: ["hello"],
+            pattern: "^(.*)$"
+          }
+        },
+        additionalProperties: false
+      },
+      {
+        type: "array",
+        title: "GizmosArray",
+        items: {
+          type: "string",
+          title: "Gizmo",
+          default: "",
+          examples: ["one", "two"],
+          pattern: "^(.*)$"
+        }
+      }
+    ],
+    serviceName: "hello-service"
+  });
+});
+
+test("tsd generation", async t => {
+  const app = express();
+  const service = { hello: x => `success ${x.msg}` };
+  const meta = {
+    expose: [
+      {
+        methodName: "hello",
+        methodTimeout: 15000,
+        params: [{ name: "greeting", type: "Greeting" }],
+        returnType: "GizmosArray",
+        help: `This is a simple method.
+It returns gizmos.`
       }
     ],
     service: "hello-service",
@@ -194,7 +301,7 @@ Can include **Markdown**. */
 export interface HelloService {
 
   /** This is a simple method.
-It just returns success. */
+It returns gizmos. */
   hello(greeting: Greeting): Promise<GizmosArray>
 
 }
