@@ -101,7 +101,8 @@ Can include **Markdown**.`
         paramNames: ["greeting"],
         params: [{ name: "greeting" }],
         methodTimeout: 15000,
-        help: "This is a simple method.\nIt just returns success."
+        help: "This is a simple method.\nIt just returns success.",
+        returnType: "any"
       }
     ]
   });
@@ -115,7 +116,8 @@ Can include **Markdown**.`
     paramNames: ["greeting"],
     params: [{ name: "greeting" }],
     methodTimeout: 15000,
-    help: "This is a simple method.\nIt just returns success."
+    help: "This is a simple method.\nIt just returns success.",
+    returnType: "any"
   });
 });
 
