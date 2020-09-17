@@ -1,24 +1,24 @@
-const pFinally = require("p-finally");
-const { Histogram, Counter } = require("prom-client");
+import { Histogram, Counter } from "prom-client";
+import { RequestHandler, ErrorRequestHandler } from "express";
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
   help: "Duration of rpc requests",
-  labelNames: ["handler"]
+  labelNames: ["handler"],
 });
 const requestCount = new Counter({
   name: "http_rpc_requests_total",
   help: "The total number of rpc requests received",
-  labelNames: ["handler"]
+  labelNames: ["handler"],
 });
 const failureCount = new Counter({
   name: "http_rpc_failures_total",
   help: "The total number of rpc failures received",
-  labelNames: ["handler", "type"]
+  labelNames: ["handler", "type"],
 });
 
 class ExtendableError extends Error {
-  constructor(message) {
+  constructor(message: string) {
     super(message);
     this.name = this.constructor.name;
     this.message = message;
@@ -30,8 +30,12 @@ class ExtendableError extends Error {
   }
 }
 
-class RpcError extends ExtendableError {
-  constructor(serviceName, methodName, inner) {
+export class RpcError extends ExtendableError {
+  serviceName: string;
+  methodName: string;
+  inner: Error & { type?: string; code?: string | number };
+
+  constructor(serviceName: string, methodName: string, inner: Error) {
     super(
       `An error occurred while executing method ${serviceName}/${methodName}`
     );
@@ -41,18 +45,39 @@ class RpcError extends ExtendableError {
   }
 }
 
-exports.createRequestHandler = (service, serviceDetails) => {
+export type Method<A = any, R = any> = (args: A) => R;
+
+export interface MethodDetails<S> {
+  methodName: keyof S;
+  methodTimeout?: number;
+  help?: string;
+  paramNames?: string[];
+}
+
+export interface ServiceDetails<S> {
+  expose: MethodDetails<S>[];
+  service: string;
+  help?: string;
+}
+
+export interface Service {
+  [methodName: string]: Method;
+}
+
+export function createRequestHandler<S extends Service>(
+  service: S,
+  serviceDetails: ServiceDetails<S>
+): RequestHandler {
   const exposed = serviceDetails.expose;
-  const methods = exposed.map(m => m.methodName);
-  const multiArg = serviceDetails.multiArg || serviceDetails.multArg || false;
+  const methods = exposed.map((m) => m.methodName);
   const serviceName = serviceDetails.service;
   const serviceHelp = serviceDetails.help || serviceName + " service";
 
   const meta = {
     serviceName,
-    multiArg,
+    multiArg: false,
     help: serviceHelp,
-    interfaces: exposed.map(method => {
+    interfaces: exposed.map((method: MethodDetails<S>) => {
       if (typeof method === "string") {
         throw new Error(
           "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
@@ -62,40 +87,35 @@ exports.createRequestHandler = (service, serviceDetails) => {
         methodName,
         methodTimeout = 60000,
         help,
-        paramNames = []
+        paramNames = [],
       } = method;
 
       return {
         methodName,
         paramNames,
         methodTimeout,
-        help: help || methodName + " method"
+        help: help || methodName + " method",
       };
-    })
+    }),
   };
 
-  return (req, res, next) => {
-    const methodName = req.path.slice(1); // remove leading slash
-    const body = req.body;
-    const args = multiArg ? body : [body];
+  return (
+    req: { path: string; method: string; body: unknown },
+    res: { json: (body: unknown) => void },
+    next: (err?: Error) => void
+  ) => {
+    const methodName: string = req.path.slice(1); // remove leading slash
 
     if (req.method === "GET" && req.path === "/") {
       return res.json(meta);
     }
 
     if (req.method === "GET" && methods.includes(methodName)) {
-      return res.json(meta.interfaces.find(i => i.methodName === methodName));
+      return res.json(meta.interfaces.find((i) => i.methodName === methodName));
     }
 
     if (req.method !== "POST" || !methods.includes(methodName)) {
       return next();
-    }
-
-    if (!Array.isArray(args)) {
-      return res.status(400).json({
-        message: "multiArg services require an array as input",
-        code: "CRIT_INPUT_ERR"
-      });
     }
 
     const requestMeta = { handler: `${serviceName}.${methodName}` };
@@ -103,21 +123,22 @@ exports.createRequestHandler = (service, serviceDetails) => {
 
     requestCount.inc(requestMeta);
 
-    const result = Promise.resolve()
-      .then(() => service[methodName].apply(service, args))
-      .then(result => res.json(result))
-      .catch(err => {
+    return Promise.resolve()
+      .then(() => service[methodName].call(service, req.body))
+      .then((result) => (console.log("result", result), res.json(result)))
+      .catch((err) => {
         failureCount.inc(Object.assign({ type: err.type }, requestMeta));
         next(new RpcError(serviceName, methodName, err));
-      });
-
-    return pFinally(result, end);
+      })
+      .finally(end);
   };
-};
+}
 
-exports.createErrorHandler = (args = {}) => {
-  const { log = () => {} } = args;
-  // eslint-disable-next-line no-unused-vars
+export function createErrorHandler(
+  args: { log?: (msg: string) => void } = {}
+): ErrorRequestHandler {
+  const { log = () => undefined } = args;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (err, req, res, next) => {
     const source = `${err.serviceName}/${err.methodName}`;
     if (!(err instanceof RpcError)) {
@@ -128,16 +149,14 @@ exports.createErrorHandler = (args = {}) => {
     log(`Error executing ${source}: ${err.inner.stack}`);
     if (!err.inner.type) {
       log(
-        `Legacy error returned from ${source}: name=${err.inner.name}, code=${
-          err.inner.code
-        }`
+        `Legacy error returned from ${source}: name=${err.inner.name}, code=${err.inner.code}`
       );
       return res.status(400).json({
         message: err.inner.message,
-        code: err.inner.code
+        code: err.inner.code,
       });
     }
 
     return res.status(400).json(err.inner);
   };
-};
+}

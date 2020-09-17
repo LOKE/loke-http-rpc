@@ -1,47 +1,40 @@
 import test from "ava";
 import http from "http";
-import express from "express";
+import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import httpRpc from "..";
+import * as httpRpc from "..";
 import { createErrorType } from "@loke/errors";
 
-function gotJsonPost(url, options) {
-  const jsonOptions = {
-    ...options,
-    json: true,
-    headers: { ...options.headers, "Content-type": "application/json" },
-    body: options.body && JSON.stringify(options.body)
-  };
-
-  return got.post(url, jsonOptions);
-}
-
-const inspect = (req, res, next) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const inspect = (req: any, res: any, next: () => void) => {
   next();
   // console.log(req.body, req.headers); // eslint-disable-line no-console
 };
 
-function createServerAddress(app) {
+function createServerAddress(app: Express) {
   const server = http.createServer(app);
 
   server.listen(0);
 
-  const port = server.address().port;
+  const address = server.address();
+  if (!address || typeof address !== "object") {
+    throw new Error("No server address found");
+  }
 
-  return `localhost:${port}`;
+  return `http://localhost:${address.port}`;
 }
 
-test("passes through messages", async t => {
+test("passes through messages", async (t) => {
   const app = express();
   const service = {
     basicError: () => {
       throw new Error("This is a basic error");
-    }
+    },
   };
-  const meta = {
+  const meta: httpRpc.ServiceDetails<typeof service> = {
     expose: [{ methodName: "basicError" }],
-    service: "hello-service"
+    service: "hello-service",
   };
 
   app.use(
@@ -54,28 +47,29 @@ test("passes through messages", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
-    gotJsonPost(`${serverAddress}/rpc/basicError`, {
-      body: {}
+  const err: any = await t.throwsAsync(() =>
+    got.post(`${serverAddress}/rpc/basicError`, {
+      json: {},
+      responseType: "json",
     })
   );
   t.deepEqual(err.response.body, {
-    message: "This is a basic error"
+    message: "This is a basic error",
   });
 });
 
-test("passes through codes if available and makes them exposed", async t => {
+test("passes through codes if available and makes them exposed", async (t) => {
   const app = express();
   const service = {
     codeError: () => {
-      const err = new Error("This is a code error");
+      const err: Error & { code?: string } = new Error("This is a code error");
       err.code = "CODE_ERROR";
       throw err;
-    }
+    },
   };
-  const meta = {
+  const meta: httpRpc.ServiceDetails<typeof service> = {
     expose: [{ methodName: "codeError" }],
-    service: "hello-service"
+    service: "hello-service",
   };
 
   app.use(
@@ -88,33 +82,34 @@ test("passes through codes if available and makes them exposed", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
-    gotJsonPost(`${serverAddress}/rpc/codeError`, {
-      body: {}
+  const err: any = await t.throwsAsync(() =>
+    got.post(`${serverAddress}/rpc/codeError`, {
+      json: {},
+      responseType: "json",
     })
   );
   t.deepEqual(err.response.body, {
     message: "This is a code error",
-    code: "CODE_ERROR"
+    code: "CODE_ERROR",
   });
 });
 
-test("passes through expose if available on a @loke/errors type", async t => {
+test("passes through expose if available on a @loke/errors type", async (t) => {
   const app = express();
   const CustomError = createErrorType({
     message: "LOKE Error",
     code: "my_code",
     help: "Some help",
-    expose: true
+    expose: true,
   });
   const service = {
     lokeError: () => {
       throw new CustomError();
-    }
+    },
   };
-  const meta = {
+  const meta: httpRpc.ServiceDetails<typeof service> = {
     expose: [{ methodName: "lokeError" }],
-    service: "hello-service"
+    service: "hello-service",
   };
 
   app.use(
@@ -127,39 +122,40 @@ test("passes through expose if available on a @loke/errors type", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
-    gotJsonPost(`${serverAddress}/rpc/lokeError`, {
-      body: {}
+  const err: any = await t.throwsAsync(() =>
+    got.post(`${serverAddress}/rpc/lokeError`, {
+      json: {},
+      responseType: "json",
     })
   );
 
   const bodyComp = Object.assign({}, err.response.body, {
-    instance: "removed"
+    instance: "removed",
   });
   t.deepEqual(bodyComp, {
     instance: "removed",
     message: "LOKE Error",
     expose: true,
     code: "my_code",
-    type: "my_code"
+    type: "my_code",
   });
 });
 
-test("passes through @loke/errors serialized in full", async t => {
+test("passes through @loke/errors serialized in full", async (t) => {
   const app = express();
   const CustomError = createErrorType({
     message: "LOKE Error",
     code: "my_code",
-    help: "Some help"
+    help: "Some help",
   });
   const service = {
     lokeError: () => {
       throw new CustomError(null, { something: "else" });
-    }
+    },
   };
-  const meta = {
+  const meta: httpRpc.ServiceDetails<typeof service> = {
     expose: [{ methodName: "lokeError" }],
-    service: "hello-service"
+    service: "hello-service",
   };
 
   app.use(
@@ -172,27 +168,28 @@ test("passes through @loke/errors serialized in full", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  const err = await t.throws(
-    gotJsonPost(`${serverAddress}/rpc/lokeError`, {
-      body: {}
+  const err: any = await t.throwsAsync(() =>
+    got.post(`${serverAddress}/rpc/lokeError`, {
+      json: {},
+      responseType: "json",
     })
   );
 
   const bodyComp = Object.assign({}, err.response.body, {
-    instance: "removed"
+    instance: "removed",
   });
   t.deepEqual(bodyComp, {
     instance: "removed",
     message: "LOKE Error",
     code: "my_code",
     type: "my_code",
-    something: "else"
+    something: "else",
   });
 });
 
-test("logs error stacktraces if not exposed", async t => {
+test("logs error stacktraces if not exposed", async (t) => {
   let logged = "";
-  const log = str => {
+  const log = (str: string) => {
     logged += str;
   };
   const app = express();
@@ -205,11 +202,11 @@ test("logs error stacktraces if not exposed", async t => {
   const service = {
     stackError: () => {
       stack1();
-    }
+    },
   };
-  const meta = {
+  const meta: httpRpc.ServiceDetails<typeof service> = {
     expose: [{ methodName: "stackError" }],
-    service: "hello-service"
+    service: "hello-service",
   };
 
   app.use(
@@ -222,9 +219,9 @@ test("logs error stacktraces if not exposed", async t => {
 
   const serverAddress = createServerAddress(app);
 
-  await t.throws(
-    gotJsonPost(`${serverAddress}/rpc/stackError`, {
-      body: {}
+  await t.throwsAsync(() =>
+    got.post(`${serverAddress}/rpc/stackError`, {
+      json: {},
     })
   );
   t.true(
