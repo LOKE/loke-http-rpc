@@ -3,7 +3,7 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import * as httpRpc from "..";
+import { Registry, ServiceDetails, createErrorHandler } from "../index";
 import { createErrorType } from "@loke/errors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,12 +27,13 @@ function createServerAddress(app: Express) {
 
 test("passes through messages", async (t) => {
   const app = express();
+  const registry = new Registry();
   const service = {
     basicError: () => {
       throw new Error("This is a basic error");
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof service> = {
     expose: [{ methodName: "basicError" }],
     service: "hello-service",
   };
@@ -41,8 +42,8 @@ test("passes through messages", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    registry.register(service, meta).createRequestHandler(),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -60,6 +61,8 @@ test("passes through messages", async (t) => {
 
 test("passes through codes if available and makes them exposed", async (t) => {
   const app = express();
+  const registry = new Registry();
+
   const service = {
     codeError: () => {
       const err: Error & { code?: string } = new Error("This is a code error");
@@ -67,7 +70,7 @@ test("passes through codes if available and makes them exposed", async (t) => {
       throw err;
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof service> = {
     expose: [{ methodName: "codeError" }],
     service: "hello-service",
   };
@@ -76,8 +79,8 @@ test("passes through codes if available and makes them exposed", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    registry.register(service, meta).createRequestHandler(),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -96,6 +99,7 @@ test("passes through codes if available and makes them exposed", async (t) => {
 
 test("passes through expose if available on a @loke/errors type", async (t) => {
   const app = express();
+  const registry = new Registry();
   const CustomError = createErrorType({
     message: "LOKE Error",
     code: "my_code",
@@ -107,7 +111,7 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
       throw new CustomError();
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof service> = {
     expose: [{ methodName: "lokeError" }],
     service: "hello-service",
   };
@@ -116,8 +120,8 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    registry.register(service, meta).createRequestHandler(),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -143,6 +147,8 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
 
 test("passes through @loke/errors serialized in full", async (t) => {
   const app = express();
+  const registry = new Registry();
+
   const CustomError = createErrorType({
     message: "LOKE Error",
     code: "my_code",
@@ -153,7 +159,7 @@ test("passes through @loke/errors serialized in full", async (t) => {
       throw new CustomError(null, { something: "else" });
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof service> = {
     expose: [{ methodName: "lokeError" }],
     service: "hello-service",
   };
@@ -162,8 +168,8 @@ test("passes through @loke/errors serialized in full", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    registry.register(service, meta).createRequestHandler(),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -193,6 +199,8 @@ test("logs error stacktraces if not exposed", async (t) => {
     logged += str;
   };
   const app = express();
+  const registry = new Registry();
+
   function stack1() {
     stack2();
   }
@@ -204,7 +212,7 @@ test("logs error stacktraces if not exposed", async (t) => {
       stack1();
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof service> = {
     expose: [{ methodName: "stackError" }],
     service: "hello-service",
   };
@@ -213,8 +221,8 @@ test("logs error stacktraces if not exposed", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler({ log })
+    registry.register(service, meta).createRequestHandler(),
+    createErrorHandler({ log })
   );
 
   const serverAddress = createServerAddress(app);

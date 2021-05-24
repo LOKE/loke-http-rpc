@@ -1,7 +1,5 @@
-import { Histogram, Counter, Registry } from "prom-client";
+import { Histogram, Counter } from "prom-client";
 import { RequestHandler, ErrorRequestHandler } from "express";
-
-const registry = new Registry();
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -66,80 +64,123 @@ export interface Service {
   [methodName: string]: Method;
 }
 
-export function createRequestHandler<S extends Service>(
-  service: S,
-  serviceDetails: ServiceDetails<S>
-): RequestHandler {
-  const exposed = serviceDetails.expose;
-  const methods = exposed.map((m) => m.methodName);
-  const serviceName = serviceDetails.service;
-  const serviceHelp = serviceDetails.help || serviceName + " service";
+class RegisteredService<S extends Service> {
+  constructor(private service: S, private serviceDetails: ServiceDetails<S>) {}
 
-  const meta = {
-    serviceName,
-    multiArg: false,
-    help: serviceHelp,
-    interfaces: exposed.map((method: MethodDetails<S>) => {
-      if (typeof method === "string") {
-        throw new Error(
-          "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
+  createRequestHandler(): RequestHandler {
+    const exposed = this.serviceDetails.expose;
+    const methods = exposed.map((m) => m.methodName);
+    const serviceName = this.serviceDetails.service;
+    const serviceHelp = this.serviceDetails.help || serviceName + " service";
+
+    const meta = {
+      serviceName,
+      multiArg: false,
+      help: serviceHelp,
+      interfaces: exposed.map((method: MethodDetails<S>) => {
+        if (typeof method === "string") {
+          throw new Error(
+            "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
+          );
+        }
+        const {
+          methodName,
+          methodTimeout = 60000,
+          help,
+          paramNames = [],
+        } = method;
+
+        return {
+          methodName,
+          paramNames,
+          methodTimeout,
+          help: help || methodName + " method",
+        };
+      }),
+    };
+
+    return (
+      req: { path: string; method: string; body: unknown },
+      res: { json: (body: unknown) => void },
+      next: (err?: Error) => void
+    ) => {
+      const methodName: string = req.path.slice(1); // remove leading slash
+
+      if (req.method === "GET" && req.path === "/") {
+        return res.json(meta);
+      }
+
+      if (req.method === "GET" && methods.includes(methodName)) {
+        return res.json(
+          meta.interfaces.find((i) => i.methodName === methodName)
         );
       }
-      const {
-        methodName,
-        methodTimeout = 60000,
-        help,
-        paramNames = [],
-      } = method;
 
-      return {
-        methodName,
-        paramNames,
-        methodTimeout,
-        help: help || methodName + " method",
-      };
-    }),
-  };
+      if (req.method !== "POST" || !methods.includes(methodName)) {
+        return next();
+      }
 
-  return (
-    req: { path: string; method: string; body: unknown },
-    res: { json: (body: unknown) => void },
-    next: (err?: Error) => void
-  ) => {
-    const methodName: string = req.path.slice(1); // remove leading slash
+      const requestMeta = { handler: `${serviceName}.${methodName}` };
+      const end = requestDuration.startTimer(requestMeta);
 
-    if (req.method === "GET" && req.path === "/") {
-      return res.json(meta);
-    }
+      requestCount.inc(requestMeta);
 
-    if (req.method === "GET" && methods.includes(methodName)) {
-      return res.json(meta.interfaces.find((i) => i.methodName === methodName));
-    }
+      return Promise.resolve()
+        .then(() => this.service[methodName].call(this.service, req.body))
+        .then((result) => (console.log("result", result), res.json(result)))
+        .catch((err) => {
+          failureCount.inc(Object.assign({ type: err.type }, requestMeta));
+          next(new RpcError(serviceName, methodName, err));
+        })
+        .finally(end);
+    };
+  }
 
-    if (req.method !== "POST" || !methods.includes(methodName)) {
-      return next();
-    }
-
-    const requestMeta = { handler: `${serviceName}.${methodName}` };
-    const end = requestDuration.startTimer(requestMeta);
-
-    registry.registerMetric(requestDuration);
-
-    requestCount.inc(requestMeta);
-
-    registry.registerMetric(requestCount);
-
-    return Promise.resolve()
-      .then(() => service[methodName].call(service, req.body))
-      .then((result) => (console.log("result", result), res.json(result)))
-      .catch((err) => {
-        failureCount.inc(Object.assign({ type: err.type }, requestMeta));
-        registry.registerMetric(failureCount);
-        next(new RpcError(serviceName, methodName, err));
-      })
-      .finally(end);
-  };
+  toWellKnown() {
+    return {
+      service: this.serviceDetails.service,
+      help: this.serviceDetails.help,
+      path: `/rpc/${this.serviceDetails.service}`,
+    };
+  }
 }
+
+export class Registry {
+  private registeredServices: Record<string, RegisteredService<any>> = {};
+
+  register<S extends Service>(
+    service: S,
+    serviceDetails: ServiceDetails<S>
+  ): RegisteredService<S> {
+    const rs = new RegisteredService<S>(service, serviceDetails);
+
+    this.registeredServices[serviceDetails.service] = rs;
+
+    return rs;
+  }
+
+  createWellKnownHandler(): RequestHandler {
+    return (
+      req: { path: string; method: string; body: unknown },
+      res: { json: (body: unknown) => void }
+    ) => {
+      const requestMeta = { handler: `well-known-services` };
+      const end = requestDuration.startTimer(requestMeta);
+
+      requestCount.inc(requestMeta);
+
+      res.json({
+        services: Object.values(this.registeredServices).map((rs) =>
+          rs.toWellKnown()
+        ),
+      });
+
+      end();
+    };
+  }
+}
+
+export const registry = new Registry();
 
 export function createErrorHandler(
   args: { log?: (msg: string) => void } = {}

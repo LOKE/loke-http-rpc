@@ -3,7 +3,7 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import * as httpRpc from "..";
+import { Registry, ServiceDetails } from "../index";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inspect = (req: any, res: any, next: () => void) => {
@@ -26,13 +26,16 @@ function createServerAddress(app: Express) {
 
 test("basic integration test", async (t) => {
   const app = express();
+
+  const registry = new Registry();
+
   const service = {
     hello: (x: { msg: string }) => {
       console.log("method", x.msg);
       return `success ${x.msg}`;
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof service> = {
     expose: [{ methodName: "hello" }],
     service: "hello-service",
   };
@@ -41,7 +44,7 @@ test("basic integration test", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta)
+    registry.register(service, meta).createRequestHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -63,8 +66,10 @@ test("basic integration test", async (t) => {
 
 test("metadata and documentation", async (t) => {
   const app = express();
+  const registry = new Registry();
+
   const service = { hello: (x: { msg: string }) => `success ${x.msg}` };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof service> = {
     expose: [
       {
         methodName: "hello",
@@ -83,7 +88,7 @@ Can include **Markdown**.`,
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta)
+    registry.register(service, meta).createRequestHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -115,5 +120,46 @@ Can include **Markdown**.`,
     paramNames: ["greeting"],
     methodTimeout: 15000,
     help: "This is a simple method.\nIt just returns success.",
+  });
+});
+
+test("well known services", async (t) => {
+  const app = express();
+
+  const registry = new Registry();
+
+  const service = {
+    hello: (x: { msg: string }) => {
+      console.log("method", x.msg);
+      return `success ${x.msg}`;
+    },
+  };
+  const meta: ServiceDetails<typeof service> = {
+    expose: [{ methodName: "hello" }],
+    service: "hello-service",
+    help: "hello",
+  };
+
+  registry.register(service, meta);
+
+  app.use(
+    "/.well-known/loke-rpc",
+    bodyParser.json(),
+    inspect,
+    registry.createWellKnownHandler()
+  );
+
+  const serverAddress = createServerAddress(app);
+
+  const body = await got.get(`${serverAddress}/.well-known/loke-rpc`).json();
+
+  t.deepEqual(body, {
+    services: [
+      {
+        help: "hello",
+        path: "/rpc/hello-service",
+        service: "hello-service",
+      },
+    ],
   });
 });
