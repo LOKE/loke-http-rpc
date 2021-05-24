@@ -1,5 +1,7 @@
-import { Histogram, Counter } from "prom-client";
+import { Histogram, Counter, Registry } from "prom-client";
 import { RequestHandler, ErrorRequestHandler } from "express";
+
+const registry = new Registry();
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -121,13 +123,18 @@ export function createRequestHandler<S extends Service>(
     const requestMeta = { handler: `${serviceName}.${methodName}` };
     const end = requestDuration.startTimer(requestMeta);
 
+    registry.registerMetric(requestDuration);
+
     requestCount.inc(requestMeta);
+
+    registry.registerMetric(requestCount);
 
     return Promise.resolve()
       .then(() => service[methodName].call(service, req.body))
       .then((result) => (console.log("result", result), res.json(result)))
       .catch((err) => {
         failureCount.inc(Object.assign({ type: err.type }, requestMeta));
+        registry.registerMetric(failureCount);
         next(new RpcError(serviceName, methodName, err));
       })
       .finally(end);
