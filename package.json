@@ -16,6 +16,9 @@
   },
   "author": "Dominic Smith",
   "ava": {
+    "files": [
+			"test/**/*"
+		],
     "extensions": [
       "ts"
     ],
