@@ -143,7 +143,7 @@ test("well known services", async (t) => {
   registry.register(service, meta);
 
   app.use(
-    "/.well-known/loke-rpc",
+    "/.well-known/loke-rpc/server",
     bodyParser.json(),
     inspect,
     registry.createWellKnownHandler()
@@ -151,7 +151,9 @@ test("well known services", async (t) => {
 
   const serverAddress = createServerAddress(app);
 
-  const body = await got.get(`${serverAddress}/.well-known/loke-rpc`).json();
+  const body = await got
+    .get(`${serverAddress}/.well-known/loke-rpc/server`)
+    .json();
 
   t.deepEqual(body, {
     services: [
