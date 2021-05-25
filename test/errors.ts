@@ -3,7 +3,7 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import { Registry, ServiceDetails, createErrorHandler } from "../index";
+import { Registry, ServiceDetails, createErrorHandler } from "../";
 import { createErrorType } from "@loke/errors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

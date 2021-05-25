@@ -3,7 +3,7 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import { Registry, ServiceDetails } from "../index";
+import { Registry, ServiceDetails } from "../";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inspect = (req: any, res: any, next: () => void) => {
