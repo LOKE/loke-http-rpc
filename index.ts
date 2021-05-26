@@ -146,6 +146,7 @@ class RegisteredService<S extends Service> {
 }
 
 export class Registry {
+  // TODO: Fix the RegisteredService type from 'any'
   private registeredServices: Record<string, RegisteredService<any>> = {};
 
   register<S extends Service>(
