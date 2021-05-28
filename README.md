@@ -22,8 +22,7 @@ const MY_SERVICE_META = {
   multiArg: false, // defaults to false. If true accepts an array for arguments, if false an array will be assumed to be the first (and only) argument.
   expose: [
     // The methods to be exposed publicly
-    // BREAKING CHANGE: expose now requires an object
-    { methodName: "doStuff" },
+
     {
       methodName: "moreStuff",
       methodTimeout: 15000,
@@ -33,9 +32,10 @@ const MY_SERVICE_META = {
   ],
 };
 
-//BREAKING CHANGE: `createRequestHandler` was renamed to createWellKnownHandler and can be accesed through register()
-//Added new createWellKnownHandler which serves the metadata
-//WELL_KNOWN_META_PATH represents the path where meta data served
+//BREAKING CHANGES:
+// "createRequestHandler" was renamed to createWellKnownHandler and can be accesed through register()
+// Added new createWellKnownHandler which serves the metadata
+// WELL_KNOWN_META_PATH represents the path where meta data served
 
 const myRpcService = registry.register(myService, MY_SERVICE_META)
   .createWellKnownHandler;
@@ -45,8 +45,8 @@ const wellKnownHandler = registry.createWellKnownHandler();
 const errorLogger = (msg) => console.log(msg);
 
 app.use("/rpc", myRpcService);
-app.use(createErrorHandler({ log: errorLogger }));
 app.get(WELL_KNOWN_META_PATH, wellKnownHandler);
+app.use(createErrorHandler({ log: errorLogger }));
 ```
 
 Then, if running on port 5000:
