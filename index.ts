@@ -68,6 +68,9 @@ export interface Service {
 class RegisteredService<S extends Service> {
   constructor(private service: S, private serviceDetails: ServiceDetails<S>) {}
 
+  /**
+   * Creates an express HTTP handler that will process RPC requests for methods exposed by the service, as well as return metadata about the service.
+   */
   createRequestHandler(): RequestHandler {
     const exposed = this.serviceDetails.expose;
     const methods = exposed.map((m) => m.methodName);
@@ -137,6 +140,9 @@ class RegisteredService<S extends Service> {
     };
   }
 
+  /**
+   * Returns metadata of the registered service
+   */
   toWellKnownMeta() {
     return {
       name: this.serviceDetails.service,
@@ -150,6 +156,9 @@ export class Registry {
   // TODO: Fix the RegisteredService type from 'any'
   private registeredServices: Record<string, RegisteredService<any>> = {};
 
+  /**
+   * Registers the service before processing RPC requests for methods exposed by the service.
+   */
   register<S extends Service>(
     service: S,
     serviceDetails: ServiceDetails<S>
@@ -161,7 +170,10 @@ export class Registry {
     return rs;
   }
 
-  createWellKnownHandler(): RequestHandler {
+  /**
+   * Creates an express HTTP handler that serves services metadata
+   */
+  createWellKnownMetaHandler(): RequestHandler {
     return (
       req: { path: string; method: string; body: unknown },
       res: { json: (body: unknown) => void }
@@ -175,7 +187,10 @@ export class Registry {
   }
 }
 
+/** Default registry */
 export const registry = new Registry();
+
+/**  Default path to expose discovery metadata on a well-known URL */
 export const WELL_KNOWN_META_PATH = "/.well-known/loke-rpc/server";
 
 export function createErrorHandler(

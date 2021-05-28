@@ -1,5 +1,34 @@
 # loke-http-rpc
 
+## Breaking Changes for v5
+
+Services need to be registered before a request handler can be created.
+
+### Migrating from v4 to v5
+
+- Services now needs to be registered before creating a request handler
+- Added new well know handler ("createWellKnownMetaHandler()") that serves service metadata
+- Exposing well-known URL for uniformity across the system to access service metadata
+
+#### v4
+
+const lokeHttpRpc = require("loke-http-rpc");
+
+const myRpcService = lokeHttpRpc.createRequestHandler(myService,MY_SERVICE_META);
+app.use("/rpc", myRpcService);
+app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
+
+#### v5
+
+const { registry, createErrorHandler, WELL_KNOWN_META_PATH } = require("loke-http-rpc");
+
+const myRpcService = registry.register(myService,MY_SERVICE_META).createRequestHandler;
+
+app.use("/rpc", myRpcService);
+app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
+app.get(WELL_KNOWN_META_PATH, registry.createWellKnownMetaHandler());
+app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
+
 ```js
 const {
   registry,
@@ -38,14 +67,12 @@ const MY_SERVICE_META = {
 // WELL_KNOWN_META_PATH represents the path where meta data served
 
 const myRpcService = registry.register(myService, MY_SERVICE_META)
-  .createWellKnownHandler;
-
-const wellKnownHandler = registry.createWellKnownHandler();
+  .createRequestHandler;
 
 const errorLogger = (msg) => console.log(msg);
 
 app.use("/rpc", myRpcService);
-app.get(WELL_KNOWN_META_PATH, wellKnownHandler);
+app.get(WELL_KNOWN_META_PATH, registry.createWellKnownMetaHandler());
 app.use(createErrorHandler({ log: errorLogger }));
 ```
 
