@@ -146,7 +146,7 @@ test("well known services", async (t) => {
     WELL_KNOWN_META_PATH,
     bodyParser.json(),
     inspect,
-    registry.createWellKnownHandler()
+    registry.createWellKnownMetaHandler()
   );
 
   const serverAddress = createServerAddress(app);
