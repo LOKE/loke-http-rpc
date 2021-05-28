@@ -10,7 +10,7 @@ Services need to be registered before a request handler can be created.
 - Added new well know handler ("createWellKnownMetaHandler()") that serves service metadata
 - Exposing well-known URL for uniformity across the system to access service metadata
 
-#### v4
+### v4:
 
 const lokeHttpRpc = require("loke-http-rpc");
 
@@ -18,7 +18,7 @@ const myRpcService = lokeHttpRpc.createRequestHandler(myService,MY_SERVICE_META)
 app.use("/rpc", myRpcService);
 app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
 
-#### v5
+### v5:
 
 const { registry, createErrorHandler, WELL_KNOWN_META_PATH } = require("loke-http-rpc");
 
