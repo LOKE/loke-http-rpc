@@ -12,22 +12,36 @@ Services need to be registered before a request handler can be created.
 
 ### v4:
 
+```js
 const lokeHttpRpc = require("loke-http-rpc");
 
-const myRpcService = lokeHttpRpc.createRequestHandler(myService,MY_SERVICE_META);
+const myRpcService = lokeHttpRpc.createRequestHandler(
+  myService,
+  MY_SERVICE_META
+);
 app.use("/rpc", myRpcService);
 app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
+```
 
 ### v5:
 
-const { registry, createErrorHandler, WELL_KNOWN_META_PATH } = require("loke-http-rpc");
+```js
+const {
+  registry,
+  createErrorHandler,
+  WELL_KNOWN_META_PATH,
+} = require("loke-http-rpc");
 
-const myRpcService = registry.register(myService,MY_SERVICE_META).createRequestHandler;
+const myRpcService = registry.register(myService, MY_SERVICE_META)
+  .createRequestHandler;
 
 app.use("/rpc", myRpcService);
 app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
 app.get(WELL_KNOWN_META_PATH, registry.createWellKnownMetaHandler());
 app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
+```
+
+## Implementation Guide
 
 ```js
 const {
