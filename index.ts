@@ -182,6 +182,7 @@ export class Registry {
 }
 
 export const registry = new Registry();
+export const wellKnownHandlerPath = "/.well-known/loke-rpc/server";
 
 export function createErrorHandler(
   args: { log?: (msg: string) => void } = {}
