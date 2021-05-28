@@ -61,11 +61,6 @@ const MY_SERVICE_META = {
   ],
 };
 
-//BREAKING CHANGES:
-// "createRequestHandler" was renamed to createWellKnownHandler and can be accesed through register()
-// Added new createWellKnownHandler which serves the metadata
-// WELL_KNOWN_META_PATH represents the path where meta data served
-
 const myRpcService = registry.register(myService, MY_SERVICE_META)
   .createRequestHandler;
 
