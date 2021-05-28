@@ -58,6 +58,7 @@ export interface ServiceDetails<S> {
   expose: MethodDetails<S>[];
   service: string;
   help?: string;
+  path?: string;
 }
 
 export interface Service {
@@ -136,11 +137,11 @@ class RegisteredService<S extends Service> {
     };
   }
 
-  toWellKnown() {
+  toWellKnownMeta() {
     return {
-      service: this.serviceDetails.service,
+      name: this.serviceDetails.service,
       help: this.serviceDetails.help,
-      path: `/rpc/${this.serviceDetails.service}`,
+      path: this.serviceDetails.path || `/rpc/${this.serviceDetails.service}`,
     };
   }
 }
@@ -165,24 +166,17 @@ export class Registry {
       req: { path: string; method: string; body: unknown },
       res: { json: (body: unknown) => void }
     ) => {
-      const requestMeta = { handler: `well-known-services` };
-      const end = requestDuration.startTimer(requestMeta);
-
-      requestCount.inc(requestMeta);
-
       res.json({
         services: Object.values(this.registeredServices).map((rs) =>
-          rs.toWellKnown()
+          rs.toWellKnownMeta()
         ),
       });
-
-      end();
     };
   }
 }
 
 export const registry = new Registry();
-export const wellKnownHandlerPath = "/.well-known/loke-rpc/server";
+export const WELL_KNOWN_META_PATH = "/.well-known/loke-rpc/server";
 
 export function createErrorHandler(
   args: { log?: (msg: string) => void } = {}

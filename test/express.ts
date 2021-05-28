@@ -3,7 +3,7 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import { Registry, ServiceDetails } from "../";
+import { Registry, ServiceDetails, WELL_KNOWN_META_PATH } from "../";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inspect = (req: any, res: any, next: () => void) => {
@@ -143,7 +143,7 @@ test("well known services", async (t) => {
   registry.register(service, meta);
 
   app.use(
-    "/.well-known/loke-rpc/server",
+    WELL_KNOWN_META_PATH,
     bodyParser.json(),
     inspect,
     registry.createWellKnownHandler()
@@ -160,7 +160,7 @@ test("well known services", async (t) => {
       {
         help: "hello",
         path: "/rpc/hello-service",
-        service: "hello-service",
+        name: "hello-service",
       },
     ],
   });
