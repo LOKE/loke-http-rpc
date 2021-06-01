@@ -7,6 +7,7 @@ Services need to be registered before a request handler can be created.
 ### Migrating from v4 to v5
 
 - Services now needs to be registered before creating a request handler
+- You can now create a request handler for multiple services contained in a separate registry
 - Added new well know handler ("createWellKnownMetaHandler()") that serves service metadata
 - Exposing well-known URL for uniformity across the system to access service metadata
 
