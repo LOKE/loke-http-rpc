@@ -40,17 +40,13 @@ test("basic integration test", async (t) => {
     service: "hello-service",
   };
 
-  app.use(
-    "/rpc",
-    bodyParser.json(),
-    inspect,
-    registry.register(service, meta).createRequestHandler()
-  );
+  registry.register(service, meta);
+  app.use("/rpc", bodyParser.json(), inspect, registry.createRequestHandler());
 
   const serverAddress = createServerAddress(app);
 
   const body = await got
-    .post(`${serverAddress}/rpc/hello`, {
+    .post(`${serverAddress}/rpc/hello-service/hello`, {
       json: { msg: "world" },
     })
     .json();
@@ -84,18 +80,15 @@ It just returns success.`,
 Can include **Markdown**.`,
   };
 
-  app.use(
-    "/rpc",
-    bodyParser.json(),
-    inspect,
-    registry.register(service, meta).createRequestHandler()
-  );
+  registry.register(service, meta);
+
+  app.use("/rpc", bodyParser.json(), inspect, registry.createRequestHandler());
 
   const serverAddress = createServerAddress(app);
 
   // All service metadata
   const allMeta = (
-    await got(`${serverAddress}/rpc`, {
+    await got(`${serverAddress}/rpc/hello-service/`, {
       responseType: "json",
     })
   ).body;
@@ -114,7 +107,9 @@ Can include **Markdown**.`,
   });
 
   // Method metadata
-  const singleMeta = await got(`${serverAddress}/rpc/hello`).json();
+  const singleMeta = await got(
+    `${serverAddress}/rpc/hello-service/hello`
+  ).json();
   t.deepEqual(singleMeta, {
     methodName: "hello",
     paramNames: ["greeting"],

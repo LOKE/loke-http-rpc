@@ -12,6 +12,8 @@ Services need to be registered before a request handler can be created.
 
 ### v4:
 
+RequestHandler is directly exposed in v4
+
 ```js
 const lokeHttpRpc = require("loke-http-rpc");
 
@@ -25,6 +27,9 @@ app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
 
 ### v5:
 
+Need to register service on registry before requesting request handler
+createRequestHandler on Registry adds the service name to the path where its exposed. ("/rpc/service-name"). This allows to handle multiple services with single registry
+
 ```js
 const {
   registry,
@@ -32,10 +37,10 @@ const {
   WELL_KNOWN_META_PATH,
 } = require("loke-http-rpc");
 
-const myRpcService = registry.register(myService, MY_SERVICE_META)
-  .createRequestHandler;
+registry.register(myService, MY_SERVICE_META);
 
-app.use("/rpc", myRpcService);
+//service will be exposed on /rpc/service-name
+app.use("/rpc", registry.createRequestHandler());
 app.get(WELL_KNOWN_META_PATH, registry.createWellKnownMetaHandler());
 app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 ```

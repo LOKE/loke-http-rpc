@@ -1,5 +1,6 @@
 import { Histogram, Counter } from "prom-client";
 import { RequestHandler, ErrorRequestHandler } from "express";
+import Router from "router";
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -66,7 +67,14 @@ export interface Service {
 }
 
 class RegisteredService<S extends Service> {
-  constructor(private service: S, private serviceDetails: ServiceDetails<S>) {}
+  /**
+   * Service name
+   */
+  name: string;
+
+  constructor(private service: S, private serviceDetails: ServiceDetails<S>) {
+    this.name = serviceDetails.service;
+  }
 
   /**
    * Creates an express HTTP handler that will process RPC requests for methods exposed by the service, as well as return metadata about the service.
@@ -184,6 +192,22 @@ export class Registry {
         ),
       });
     };
+  }
+
+  /**
+   * Creates an express HTTP handler that will process RPC requests for all services registered
+   */
+  createRequestHandler(): RequestHandler {
+    const router = new Router();
+
+    Object.values(this.registeredServices).forEach((registeredService) => {
+      router.use(
+        "/" + registeredService.name,
+        registeredService.createRequestHandler()
+      );
+    });
+
+    return router;
   }
 }
 
