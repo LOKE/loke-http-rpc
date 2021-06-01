@@ -79,12 +79,11 @@ const MY_SERVICE_META = {
   ],
 };
 
-const myRpcService = registry.register(myService, MY_SERVICE_META)
-  .createRequestHandler;
+registry.register(myService, MY_SERVICE_META);
 
 const errorLogger = (msg) => console.log(msg);
 
-app.use("/rpc", myRpcService);
+app.use("/rpc", registry.createRequestHandler());
 app.get(WELL_KNOWN_META_PATH, registry.createWellKnownMetaHandler());
 app.use(createErrorHandler({ log: errorLogger }));
 ```
