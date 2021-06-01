@@ -30,6 +30,12 @@ app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
 Need to register service on registry before requesting request handler
 createRequestHandler on Registry adds the service name to the path where its exposed. ("/rpc/service-name"). This allows to handle multiple services with single registry
 
+- registry.register() registers the service
+- registry.createRequestHandler() will process RPC requests for methods exposed by the service, as well as return metadata about the service
+- registry.createWellKnownMetaHandler() serves service metadata
+- registry.createErrorHandler() handles errors in processing rpc requests
+- WELL_KNOWN_META_PATH returns default path to expose discovery metadata on a well-known URL
+
 ```js
 const {
   registry,
