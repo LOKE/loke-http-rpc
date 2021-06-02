@@ -1,6 +1,5 @@
 import { Histogram, Counter } from "prom-client";
 import { RequestHandler, ErrorRequestHandler } from "express";
-import Router from "router";
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -66,156 +65,153 @@ export interface Service {
   [methodName: string]: Method;
 }
 
-class RegisteredService<S extends Service> {
-  /**
-   * Service name
-   */
-  name: string;
+interface ServiceSet<S extends Service> {
+  implementation: S;
+  meta: ServiceDetails<S>;
+}
 
-  constructor(private service: S, private serviceDetails: ServiceDetails<S>) {
-    this.name = serviceDetails.service;
-  }
+function hasMethod(
+  serviceDetails: ServiceDetails<any>,
+  methodName: string
+): boolean {
+  return serviceDetails.expose.map((m) => m.methodName).includes(methodName);
+}
 
-  /**
-   * Creates an express HTTP handler that will process RPC requests for methods exposed by the service, as well as return metadata about the service.
-   */
-  createRequestHandler(): RequestHandler {
-    const exposed = this.serviceDetails.expose;
-    const methods = exposed.map((m) => m.methodName);
-    const serviceName = this.serviceDetails.service;
-    const serviceHelp = this.serviceDetails.help || serviceName + " service";
-
-    const meta = {
-      serviceName,
-      multiArg: false,
-      help: serviceHelp,
-      interfaces: exposed.map((method: MethodDetails<S>) => {
-        if (typeof method === "string") {
-          throw new Error(
-            "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
-          );
-        }
-        const {
-          methodName,
-          methodTimeout = 60000,
-          help,
-          paramNames = [],
-        } = method;
-
-        return {
-          methodName,
-          paramNames,
-          methodTimeout,
-          help: help || methodName + " method",
-        };
-      }),
-    };
-
-    return (
-      req: { path: string; method: string; body: unknown },
-      res: { json: (body: unknown) => void },
-      next: (err?: Error) => void
-    ) => {
-      const methodName: string = req.path.slice(1); // remove leading slash
-
-      if (req.method === "GET" && req.path === "/") {
-        return res.json(meta);
-      }
-
-      if (req.method === "GET" && methods.includes(methodName)) {
-        return res.json(
-          meta.interfaces.find((i) => i.methodName === methodName)
+function getExposedMeta<S extends Service>(serviceDetails: ServiceDetails<S>) {
+  return {
+    serviceName: serviceDetails.service,
+    multiArg: false,
+    help: serviceDetails.help || serviceDetails.service + " service",
+    interfaces: serviceDetails.expose.map((method: MethodDetails<S>) => {
+      if (typeof method === "string") {
+        throw new Error(
+          "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
         );
       }
+      const {
+        methodName,
+        methodTimeout = 60000,
+        help,
+        paramNames = [],
+      } = method;
 
-      if (req.method !== "POST" || !methods.includes(methodName)) {
-        return next();
-      }
+      return {
+        methodName,
+        paramNames,
+        methodTimeout,
+        help: help || methodName + " method",
+      };
+    }),
+  };
+}
 
-      const requestMeta = { handler: `${serviceName}.${methodName}` };
-      const end = requestDuration.startTimer(requestMeta);
+interface CreateRequestHandlerOptions {
+  /**
+   * If true runs in legacy mode where only a single service is served from the root path.
+   * Deprecated - do not use except for legacy scenarios.
+   */
+  legacy?: boolean;
+}
 
+function parsePath(
+  path: string,
+  legacy: boolean
+): { serviceName?: string; methodName: string } {
+  const pathParts = path.split("/");
+
+  // Legacy mode still supports the new /service-name/methodName format
+  // If length is 2 we assume it is the old /methodName format
+  if (legacy && pathParts.length === 2) {
+    const [, methodName] = path.split("/");
+    return { methodName };
+  }
+
+  const [, serviceName, methodName] = path.split("/");
+
+  return { serviceName, methodName };
+}
+
+// TODO: can't seem to get out of using any here because the type is an array
+export function createRequestHandler(
+  services: ServiceSet<any>[],
+  options?: CreateRequestHandlerOptions
+): RequestHandler {
+  const serviceMap = services.reduce((obj, service) => {
+    obj[service.meta.service] = service;
+    return obj;
+  }, {} as Record<string, ServiceSet<any>>);
+
+  const { legacy = false } = options || {};
+
+  if (legacy && services.length !== 1) {
+    throw new Error("Only 1 service is supported in legacy mode");
+  }
+
+  return async (
+    req: { path: string; method: string; body: unknown },
+    res: { json: (body: unknown) => void },
+    next: (err?: Error) => void
+  ) => {
+    // Is it requested the meta for all known services?
+    if (req.path === "/") {
+      // return an array of service metadata
+      res.json({
+        services: Object.values(services.map((s) => getExposedMeta(s.meta))),
+      });
+      return;
+    }
+
+    // eg /email-service/sendEmail -> ["", "email-service", "sendEmail"]
+    const { serviceName: parsedServiceName, methodName } = parsePath(
+      req.path,
+      legacy
+    );
+    const serviceName = legacy
+      ? services[0].meta.service
+      : (parsedServiceName as string);
+
+    if (!serviceMap[serviceName]) {
+      // We don't have this service, don't handle
+      return next();
+    }
+
+    const service = serviceMap[serviceName];
+
+    if (req.method === "GET" && req.path === "/" + serviceName) {
+      return res.json(getExposedMeta(service.meta));
+    }
+
+    if (req.method === "GET" && hasMethod(service.meta, methodName)) {
+      return res.json(
+        getExposedMeta(service.meta).interfaces.find(
+          (i) => i.methodName === methodName
+        )
+      );
+    }
+
+    if (req.method !== "POST" || !hasMethod(service.meta, methodName)) {
+      return next();
+    }
+
+    const requestMeta = { handler: `${serviceName}.${methodName}` };
+    const end = requestDuration.startTimer(requestMeta);
+
+    try {
       requestCount.inc(requestMeta);
 
-      return Promise.resolve()
-        .then(() => this.service[methodName].call(this.service, req.body))
-        .then((result) => (console.log("result", result), res.json(result)))
-        .catch((err) => {
-          failureCount.inc(Object.assign({ type: err.type }, requestMeta));
-          next(new RpcError(serviceName, methodName, err));
-        })
-        .finally(end);
-    };
-  }
-
-  /**
-   * Returns metadata of the registered service
-   */
-  toWellKnownMeta() {
-    return {
-      name: this.serviceDetails.service,
-      help: this.serviceDetails.help,
-      path: this.serviceDetails.path || `/rpc/${this.serviceDetails.service}`,
-    };
-  }
-}
-
-export class Registry {
-  // TODO: Fix the RegisteredService type from 'any'
-  private registeredServices: Record<string, RegisteredService<any>> = {};
-
-  /**
-   * Registers the service before processing RPC requests for methods exposed by the service.
-   */
-  register<S extends Service>(
-    service: S,
-    serviceDetails: ServiceDetails<S>
-  ): RegisteredService<S> {
-    const rs = new RegisteredService<S>(service, serviceDetails);
-
-    this.registeredServices[serviceDetails.service] = rs;
-
-    return rs;
-  }
-
-  /**
-   * Creates an express HTTP handler that serves services metadata
-   */
-  createWellKnownMetaHandler(): RequestHandler {
-    return (
-      req: { path: string; method: string; body: unknown },
-      res: { json: (body: unknown) => void }
-    ) => {
-      res.json({
-        services: Object.values(this.registeredServices).map((rs) =>
-          rs.toWellKnownMeta()
-        ),
-      });
-    };
-  }
-
-  /**
-   * Creates an express HTTP handler that will process RPC requests for all services registered
-   */
-  createRequestHandler(): RequestHandler {
-    const router = new Router();
-
-    Object.values(this.registeredServices).forEach((registeredService) => {
-      router.use(
-        "/" + registeredService.name,
-        registeredService.createRequestHandler()
+      const result = await service.implementation[methodName].call(
+        service.implementation,
+        req.body
       );
-    });
-
-    return router;
-  }
+      res.json(result);
+    } catch (err) {
+      failureCount.inc(Object.assign({ type: err.type }, requestMeta));
+      next(new RpcError(serviceName, methodName, err));
+    } finally {
+      end();
+    }
+  };
 }
-
-/** Default registry */
-export const registry = new Registry();
-
-/**  Default path to expose discovery metadata on a well-known URL */
-export const WELL_KNOWN_META_PATH = "/.well-known/loke-rpc/server";
 
 export function createErrorHandler(
   args: { log?: (msg: string) => void } = {}

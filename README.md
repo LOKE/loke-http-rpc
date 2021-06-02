@@ -2,14 +2,15 @@
 
 ## Breaking Changes for v5
 
-Services need to be registered before a request handler can be created.
+- createRequestHandler now accepts a list of services.
+- The root endpoint on a request handler now returns an array of metadata for each service
+- Legacy mode can be enabled to still handle calls in the older `/methodName` format.
+- It is now preferred to use the `/service-name/methodName` format, even if a process only hosts 1 service.
 
 ### Migrating from v4 to v5
 
-- Services now needs to be registered before creating a request handler
-- You can now create a request handler for multiple services contained in a separate registry
-- Added new well know handler ("createWellKnownMetaHandler()") that serves service metadata
-- Exposing well-known URL for uniformity across the system to access service metadata
+- Pass in your services as an array, instead of 1-by-1.
+- If using an older style setup with one service hosted at `/rpc` then enable legacy mode.
 
 ### v4:
 
@@ -28,27 +29,26 @@ app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
 
 ### v5:
 
-Need to register service on registry before requesting request handler
-createRequestHandler on Registry adds the service name to the path where its exposed. ("/rpc/service-name"). This allows to handle multiple services with single registry
-
-- registry.register() registers the service
-- registry.createRequestHandler() will process RPC requests for methods exposed by the service, as well as return metadata about the service
-- registry.createWellKnownMetaHandler() serves service metadata
-- registry.createErrorHandler() handles errors in processing rpc requests
-- WELL_KNOWN_META_PATH returns default path to expose discovery metadata on a well-known URL
+createRequestHandler adds the service name to the path where its exposed. ("/rpc/service-name"). This allows to handle multiple services with single handler.
 
 ```js
-const {
-  registry,
-  createErrorHandler,
-  WELL_KNOWN_META_PATH,
-} = require("loke-http-rpc");
+const { createRequestHandler, createErrorHandler } = require("loke-http-rpc");
 
-registry.register(myService, MY_SERVICE_META);
+// service will be exposed on /rpc/service-name
+app.use(
+  "/rpc",
+  createRequestHandler([{ implementation: myService, meta: MY_SERVICE_META }])
+);
+app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 
-//service will be exposed on /rpc/service-name
-app.use("/rpc", registry.createRequestHandler());
-app.get(WELL_KNOWN_META_PATH, registry.createWellKnownMetaHandler());
+// or... service will be exposed on /rpc AND /rpc/service-name
+// but will be limited to 1 service
+app.use(
+  "/rpc",
+  createRequestHandler([{ implementation: myService, meta: MY_SERVICE_META }], {
+    legacy: true,
+  })
+);
 app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 ```
 
