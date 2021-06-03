@@ -55,11 +55,7 @@ app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 ## Implementation Guide
 
 ```js
-const {
-  registry,
-  createErrorHandler,
-  WELL_KNOWN_META_PATH,
-} = require("loke-http-rpc");
+const { createRequestHandler, createErrorHandler } = require("loke-http-rpc");
 
 const myService = {
   async doStuff() {
@@ -86,12 +82,16 @@ const MY_SERVICE_META = {
   ],
 };
 
-registry.register(myService, MY_SERVICE_META);
+const rpcHandler = createRequestHandler([
+  {
+    implementation: service,
+    meta: SERVICE_META,
+  },
+]);
 
 const errorLogger = (msg) => console.log(msg);
 
-app.use("/rpc", registry.createRequestHandler());
-app.get(WELL_KNOWN_META_PATH, registry.createWellKnownMetaHandler());
+app.use("/rpc", rpcHandler);
 app.use(createErrorHandler({ log: errorLogger }));
 ```
 
