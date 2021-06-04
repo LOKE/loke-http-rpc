@@ -58,26 +58,31 @@ export interface ServiceDetails<S> {
   expose: MethodDetails<S>[];
   service: string;
   help?: string;
+  path?: string;
 }
 
 export interface Service {
   [methodName: string]: Method;
 }
 
-export function createRequestHandler<S extends Service>(
-  service: S,
-  serviceDetails: ServiceDetails<S>
-): RequestHandler {
-  const exposed = serviceDetails.expose;
-  const methods = exposed.map((m) => m.methodName);
-  const serviceName = serviceDetails.service;
-  const serviceHelp = serviceDetails.help || serviceName + " service";
+interface ServiceSet<S extends Service> {
+  implementation: S;
+  meta: ServiceDetails<S>;
+}
 
-  const meta = {
-    serviceName,
+function hasMethod(
+  serviceDetails: ServiceDetails<any>,
+  methodName: string
+): boolean {
+  return serviceDetails.expose.map((m) => m.methodName).includes(methodName);
+}
+
+function getExposedMeta<S extends Service>(serviceDetails: ServiceDetails<S>) {
+  return {
+    serviceName: serviceDetails.service,
     multiArg: false,
-    help: serviceHelp,
-    interfaces: exposed.map((method: MethodDetails<S>) => {
+    help: serviceDetails.help || serviceDetails.service + " service",
+    interfaces: serviceDetails.expose.map((method: MethodDetails<S>) => {
       if (typeof method === "string") {
         throw new Error(
           "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
@@ -98,39 +103,113 @@ export function createRequestHandler<S extends Service>(
       };
     }),
   };
+}
 
-  return (
+interface CreateRequestHandlerOptions {
+  /**
+   * If true runs in legacy mode where only a single service is served from the root path.
+   * Deprecated - do not use except for legacy scenarios.
+   */
+  legacy?: boolean;
+}
+
+function parsePath(
+  path: string,
+  legacy: boolean
+): { serviceName?: string; methodName: string } {
+  const pathParts = path.split("/");
+
+  // Legacy mode still supports the new /service-name/methodName format
+  // If length is 2 we assume it is the old /methodName format
+  if (legacy && pathParts.length === 2) {
+    const [, methodName] = path.split("/");
+    return { methodName };
+  }
+
+  const [, serviceName, methodName] = path.split("/");
+
+  return { serviceName, methodName };
+}
+
+// TODO: can't seem to get out of using any here because the type is an array
+export function createRequestHandler(
+  services: ServiceSet<any>[],
+  options?: CreateRequestHandlerOptions
+): RequestHandler {
+  const serviceMap = services.reduce((obj, service) => {
+    obj[service.meta.service] = service;
+    return obj;
+  }, {} as Record<string, ServiceSet<any>>);
+
+  const { legacy = false } = options || {};
+
+  if (legacy && services.length !== 1) {
+    throw new Error("Only 1 service is supported in legacy mode");
+  }
+
+  return async (
     req: { path: string; method: string; body: unknown },
     res: { json: (body: unknown) => void },
     next: (err?: Error) => void
   ) => {
-    const methodName: string = req.path.slice(1); // remove leading slash
-
-    if (req.method === "GET" && req.path === "/") {
-      return res.json(meta);
+    // Is it requested the meta for all known services?
+    if (req.path === "/") {
+      // return an array of service metadata
+      res.json({
+        services: Object.values(services.map((s) => getExposedMeta(s.meta))),
+      });
+      return;
     }
 
-    if (req.method === "GET" && methods.includes(methodName)) {
-      return res.json(meta.interfaces.find((i) => i.methodName === methodName));
+    // eg /email-service/sendEmail -> ["", "email-service", "sendEmail"]
+    const { serviceName: parsedServiceName, methodName } = parsePath(
+      req.path,
+      legacy
+    );
+    const serviceName = legacy
+      ? services[0].meta.service
+      : (parsedServiceName as string);
+
+    if (!serviceMap[serviceName]) {
+      // We don't have this service, don't handle
+      return next();
     }
 
-    if (req.method !== "POST" || !methods.includes(methodName)) {
+    const service = serviceMap[serviceName];
+
+    if (req.method === "GET" && req.path === "/" + serviceName) {
+      return res.json(getExposedMeta(service.meta));
+    }
+
+    if (req.method === "GET" && hasMethod(service.meta, methodName)) {
+      return res.json(
+        getExposedMeta(service.meta).interfaces.find(
+          (i) => i.methodName === methodName
+        )
+      );
+    }
+
+    if (req.method !== "POST" || !hasMethod(service.meta, methodName)) {
       return next();
     }
 
     const requestMeta = { handler: `${serviceName}.${methodName}` };
     const end = requestDuration.startTimer(requestMeta);
 
-    requestCount.inc(requestMeta);
+    try {
+      requestCount.inc(requestMeta);
 
-    return Promise.resolve()
-      .then(() => service[methodName].call(service, req.body))
-      .then((result) => (console.log("result", result), res.json(result)))
-      .catch((err) => {
-        failureCount.inc(Object.assign({ type: err.type }, requestMeta));
-        next(new RpcError(serviceName, methodName, err));
-      })
-      .finally(end);
+      const result = await service.implementation[methodName].call(
+        service.implementation,
+        req.body
+      );
+      res.json(result);
+    } catch (err) {
+      failureCount.inc(Object.assign({ type: err.type }, requestMeta));
+      next(new RpcError(serviceName, methodName, err));
+    } finally {
+      end();
+    }
   };
 }
 

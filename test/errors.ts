@@ -3,7 +3,7 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import * as httpRpc from "..";
+import { createRequestHandler, ServiceDetails, createErrorHandler } from "../";
 import { createErrorType } from "@loke/errors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,12 +27,12 @@ function createServerAddress(app: Express) {
 
 test("passes through messages", async (t) => {
   const app = express();
-  const service = {
+  const implementation = {
     basicError: () => {
       throw new Error("This is a basic error");
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof implementation> = {
     expose: [{ methodName: "basicError" }],
     service: "hello-service",
   };
@@ -41,8 +41,8 @@ test("passes through messages", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -60,14 +60,15 @@ test("passes through messages", async (t) => {
 
 test("passes through codes if available and makes them exposed", async (t) => {
   const app = express();
-  const service = {
+
+  const implementation = {
     codeError: () => {
       const err: Error & { code?: string } = new Error("This is a code error");
       err.code = "CODE_ERROR";
       throw err;
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof implementation> = {
     expose: [{ methodName: "codeError" }],
     service: "hello-service",
   };
@@ -76,8 +77,8 @@ test("passes through codes if available and makes them exposed", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -96,18 +97,19 @@ test("passes through codes if available and makes them exposed", async (t) => {
 
 test("passes through expose if available on a @loke/errors type", async (t) => {
   const app = express();
+
   const CustomError = createErrorType({
     message: "LOKE Error",
     code: "my_code",
     help: "Some help",
     expose: true,
   });
-  const service = {
+  const implementation = {
     lokeError: () => {
       throw new CustomError();
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof implementation> = {
     expose: [{ methodName: "lokeError" }],
     service: "hello-service",
   };
@@ -116,8 +118,8 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -143,17 +145,18 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
 
 test("passes through @loke/errors serialized in full", async (t) => {
   const app = express();
+
   const CustomError = createErrorType({
     message: "LOKE Error",
     code: "my_code",
     help: "Some help",
   });
-  const service = {
+  const implementation = {
     lokeError: () => {
       throw new CustomError(null, { something: "else" });
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof implementation> = {
     expose: [{ methodName: "lokeError" }],
     service: "hello-service",
   };
@@ -162,8 +165,8 @@ test("passes through @loke/errors serialized in full", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler()
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
+    createErrorHandler()
   );
 
   const serverAddress = createServerAddress(app);
@@ -193,18 +196,19 @@ test("logs error stacktraces if not exposed", async (t) => {
     logged += str;
   };
   const app = express();
+
   function stack1() {
     stack2();
   }
   function stack2() {
     throw new Error("Stacked");
   }
-  const service = {
+  const implementation = {
     stackError: () => {
       stack1();
     },
   };
-  const meta: httpRpc.ServiceDetails<typeof service> = {
+  const meta: ServiceDetails<typeof implementation> = {
     expose: [{ methodName: "stackError" }],
     service: "hello-service",
   };
@@ -213,8 +217,8 @@ test("logs error stacktraces if not exposed", async (t) => {
     "/rpc",
     bodyParser.json(),
     inspect,
-    httpRpc.createRequestHandler(service, meta),
-    httpRpc.createErrorHandler({ log })
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
+    createErrorHandler({ log })
   );
 
   const serverAddress = createServerAddress(app);
