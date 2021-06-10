@@ -1,4 +1,4 @@
-# loke-http-rpc
+# @loke/http-rpc
 
 ## Breaking Changes for v5
 
@@ -17,7 +17,7 @@
 RequestHandler is directly exposed in v4
 
 ```js
-const lokeHttpRpc = require("loke-http-rpc");
+const lokeHttpRpc = require("@loke/http-rpc");
 
 const myRpcService = lokeHttpRpc.createRequestHandler(
   myService,
@@ -32,7 +32,7 @@ app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
 createRequestHandler adds the service name to the path where its exposed. ("/rpc/service-name"). This allows to handle multiple services with single handler.
 
 ```js
-const { createRequestHandler, createErrorHandler } = require("loke-http-rpc");
+const { createRequestHandler, createErrorHandler } = require("@loke/http-rpc");
 
 // service will be exposed on /rpc/service-name
 app.use(
@@ -55,7 +55,7 @@ app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 ## Implementation Guide
 
 ```js
-const { createRequestHandler, createErrorHandler } = require("loke-http-rpc");
+const { createRequestHandler, createErrorHandler } = require("@loke/http-rpc");
 
 const myService = {
   async doStuff() {
