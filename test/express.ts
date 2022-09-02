@@ -256,7 +256,7 @@ test("exposes metadata for all services in handler", async (t) => {
 
   const service1 = {
     implementation: {
-      hello: (x: { msg: string }) => {
+      hello1: (x: { msg: string }) => {
         return `success ${x.msg}`;
       },
     },
@@ -268,7 +268,7 @@ test("exposes metadata for all services in handler", async (t) => {
   };
   const service2 = {
     implementation: {
-      hello: (x: { msg: string }) => {
+      hello2: (x: { msg: string }) => {
         return `success ${x.msg}`;
       },
     },
