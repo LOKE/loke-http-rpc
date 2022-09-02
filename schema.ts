@@ -1,5 +1,5 @@
 import Ajv, { JTDSchemaType } from "ajv/dist/jtd";
-import { ServiceSet, Service, ServiceDetails } from ".";
+import { ServiceSet, Service, ServiceDetails } from "./common";
 
 interface ValidationErrorParams {
   instancePath?: string;

@@ -1,6 +1,15 @@
 import { Histogram, Counter } from "prom-client";
 import { RequestHandler, ErrorRequestHandler } from "express";
-import { JTDSchemaType } from "ajv/dist/jtd";
+import { ServiceSet, ServiceDetails, MethodDetails } from "./common";
+
+export {
+  ServiceSet,
+  ServiceDetails,
+  MethodDetails,
+  Service,
+  Method,
+} from "./common";
+export { serviceWithSchema } from "./schema";
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -44,39 +53,6 @@ export class RpcError extends ExtendableError {
     this.methodName = methodName;
     this.inner = inner;
   }
-}
-
-export type Method<A = any, R = any> = (args: A) => R;
-
-export interface MethodDetails {
-  methodName: string;
-  methodTimeout?: number;
-  help?: string;
-  paramNames?: string[];
-  requestTypeDef?: JTDSchemaType<any, any>;
-  responseTypeDef?: JTDSchemaType<any, any>;
-}
-
-export interface ServiceDetails<
-  S,
-  Def extends Record<string, unknown> = Record<string, never>
-> {
-  expose: MethodDetails[];
-  service: string;
-  help?: string;
-  path?: string;
-  definitions?: {
-    [K in keyof Def]: JTDSchemaType<Def[K], Def>;
-  };
-}
-
-export interface Service {
-  [methodName: string]: Method;
-}
-
-export interface ServiceSet<S extends Service> {
-  implementation: S;
-  meta: ServiceDetails<S>;
 }
 
 function getExposedMeta<Def extends Record<string, unknown>>(
