@@ -52,6 +52,69 @@ app.use(
 app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 ```
 
+With Schema
+
+```ts
+const { serviceWithSchema } = require("@loke/http-rpc");
+
+const MY_SERVICE_META = {
+  service: "my-service", // display name
+  help: "Documentation goes here",
+  multiArg: false, // defaults to false. If true accepts an array for arguments, if false an array will be assumed to be the first (and only) argument.
+  expose: [
+    // The methods to be exposed publicly
+
+    {
+      methodName: "moreStuff",
+      methodTimeout: 15000,
+      paramNames: ["stuffs"],
+      help: "This is a silly method",
+    },
+  ],
+};
+
+const meta = { implementation: myService, meta: MY_SERVICE_META };
+
+interface Thing {
+  name: string;
+}
+
+type Defs = { Thing: Thing };
+
+// can now be...
+
+// https://jsontypedef.com/docs/jtd-in-5-minutes/#empty-schemas
+
+// instead of `typeof myService` you could also name a type like
+// type Service = {}
+const metaWithSchema = serviceWithSchema<typeof myService, Defs>(myService, {
+  name: "my-service",
+  // Record<string, JTD>
+  definitions: {
+    Thing: {
+      properties: {
+        name: { type: "string" },
+      },
+    },
+  },
+  methods: {
+    moreStuff: {
+      help: "This is a silly method",
+      // JTD
+      requestTypeDef: {
+        properties: {
+          stuffs: { type: "string" },
+        },
+        optionalProperties: {
+          thing: {},
+        },
+      },
+      responseTypeDef: { ref: "Thing" },
+    },
+  },
+});
+```
+
 ## Implementation Guide
 
 ```js
