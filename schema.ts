@@ -60,15 +60,16 @@ export function serviceWithSchema<
     };
     methods: Methods<S, Def>;
   }
-): ServiceSet<Service> {
+): ServiceSet<any> {
   const ajv = new Ajv();
 
   const implementation: {
     [methodName: string]: (args: unknown) => Promise<unknown>;
   } = {};
 
-  const serviceDetails: ServiceDetails<unknown> = {
+  const serviceDetails: ServiceDetails<S, Def> = {
     service: serviceMeta.name,
+    definitions: serviceMeta?.definitions,
     expose: [],
   };
 

@@ -30,5 +30,5 @@ export interface Service {
 
 export interface ServiceSet<S extends Service> {
   implementation: S;
-  meta: ServiceDetails<S>;
+  meta: ServiceDetails<S, any>;
 }
