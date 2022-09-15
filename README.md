@@ -136,10 +136,6 @@ const myService = {
 // Type for definitions
 type Defs = { Thing: Thing };
 
-// can now be...
-
-// https://jsontypedef.com/docs/jtd-in-5-minutes/#empty-schemas
-
 // instead of `typeof myService` you could also name a type like
 // type Service = {}
 const myRpcService = serviceWithSchema<typeof myService, Defs>(myService, {
