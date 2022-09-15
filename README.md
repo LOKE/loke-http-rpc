@@ -52,69 +52,6 @@ app.use(
 app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 ```
 
-With Schema
-
-```ts
-const { serviceWithSchema } = require("@loke/http-rpc");
-
-const MY_SERVICE_META = {
-  service: "my-service", // display name
-  help: "Documentation goes here",
-  multiArg: false, // defaults to false. If true accepts an array for arguments, if false an array will be assumed to be the first (and only) argument.
-  expose: [
-    // The methods to be exposed publicly
-
-    {
-      methodName: "moreStuff",
-      methodTimeout: 15000,
-      paramNames: ["stuffs"],
-      help: "This is a silly method",
-    },
-  ],
-};
-
-const meta = { implementation: myService, meta: MY_SERVICE_META };
-
-interface Thing {
-  name: string;
-}
-
-type Defs = { Thing: Thing };
-
-// can now be...
-
-// https://jsontypedef.com/docs/jtd-in-5-minutes/#empty-schemas
-
-// instead of `typeof myService` you could also name a type like
-// type Service = {}
-const metaWithSchema = serviceWithSchema<typeof myService, Defs>(myService, {
-  name: "my-service",
-  // Record<string, JTD>
-  definitions: {
-    Thing: {
-      properties: {
-        name: { type: "string" },
-      },
-    },
-  },
-  methods: {
-    moreStuff: {
-      help: "This is a silly method",
-      // JTD
-      requestTypeDef: {
-        properties: {
-          stuffs: { type: "string" },
-        },
-        optionalProperties: {
-          thing: {},
-        },
-      },
-      responseTypeDef: { ref: "Thing" },
-    },
-  },
-});
-```
-
 ## Implementation Guide
 
 ```js
@@ -168,4 +105,76 @@ Also, to list runtime RPC metadata you can GET /rpc
 
 ```
 curl -X GET http://localhost:5000/rpc
+```
+
+## Schemas
+
+Since v5.1.0 we now support
+[JTD Schemas](https://jsontypedef.com/docs/jtd-in-5-minutes/) for requests and
+responses validation (Via [AJV](https://ajv.js.org/json-type-definition.html)).
+
+```ts
+const {
+  createRequestHandler,
+  createErrorHandler,
+  serviceWithSchema,
+} = require("@loke/http-rpc");
+
+interface Thing {
+  name: string;
+}
+
+const myService = {
+  async doStuff(args: {}) {
+    return await Promise.resolve("stuff done");
+  },
+  async getThing(args: { name: string }): Promise<Thing> {
+    return { name: args.name };
+  },
+};
+
+// Type for definitions
+type Defs = { Thing: Thing };
+
+// can now be...
+
+// https://jsontypedef.com/docs/jtd-in-5-minutes/#empty-schemas
+
+// instead of `typeof myService` you could also name a type like
+// type Service = {}
+const myRpcService = serviceWithSchema<typeof myService, Defs>(myService, {
+  name: "my-service",
+  // Record<string, JTD>
+  definitions: {
+    Thing: {
+      properties: {
+        name: { type: "string" },
+      },
+    },
+  },
+  methods: {
+    doStuff: {
+      help: "This is a silly method",
+      // JTD
+      requestTypeDef: {
+        properties: {},
+      },
+      responseTypeDef: { type: "string" },
+    },
+    getThing: {
+      help: "Get a thing",
+      requestTypeDef: {
+        properties: { name: { type: "string" } },
+      },
+      responseTypeDef: { ref: "Thing" },
+    },
+  },
+});
+
+const rpcHandler = createRequestHandler([myRpcService]);
+
+const errorLogger = (msg) => console.log(msg);
+
+app.use("/rpc", rpcHandler);
+app.use(createErrorHandler({ log: errorLogger }));
 ```
