@@ -1,4 +1,4 @@
-import Ajv, { JTDSchemaType } from "ajv/dist/jtd";
+import Ajv, { ErrorObject, JTDSchemaType } from "ajv/dist/jtd";
 import { ServiceSet, Service, ServiceDetails } from "./common";
 
 interface ValidationErrorParams {
@@ -17,6 +17,26 @@ class ValidationError extends Error {
 
     this.code = "validation";
     this.type = "https://errors.loke.global/@loke/http-rpc/validation";
+    Object.defineProperty(this, "message", {
+      enumerable: true,
+      value: message,
+    });
+
+    Object.assign(this, params);
+  }
+}
+
+class ResponseValidationError extends Error {
+  type: string;
+  code: string;
+  instancePath?: string;
+  schemaPath?: string;
+
+  constructor(message: string, params: ValidationErrorParams) {
+    super(message);
+
+    this.code = "validation";
+    this.type = "https://errors.loke.global/@loke/http-rpc/response-validation";
     Object.defineProperty(this, "message", {
       enumerable: true,
       value: message,
@@ -48,6 +68,10 @@ type Methods<
   >;
 };
 
+interface Logger {
+  warn: (str: string) => void;
+}
+
 export function serviceWithSchema<
   S extends Service,
   Def extends Record<string, unknown> = Record<string, never>
@@ -59,6 +83,8 @@ export function serviceWithSchema<
       [K in keyof Def]: JTDSchemaType<Def[K], Def>;
     };
     methods: Methods<S, Def>;
+    logger: Logger;
+    strictResponseValidation?: boolean;
   }
 ): ServiceSet<any> {
   const ajv = new Ajv();
@@ -72,6 +98,11 @@ export function serviceWithSchema<
     definitions: serviceMeta?.definitions,
     expose: [],
   };
+
+  const {
+    logger,
+    strictResponseValidation = process.env.NODE_ENV !== "production",
+  } = serviceMeta;
 
   for (const [methodName, methodMeta] of Object.entries(serviceMeta.methods)) {
     const requestSchema = ajv.compile({
@@ -105,10 +136,7 @@ export function serviceWithSchema<
           if (err) {
             params.instancePath = err.instancePath;
             params.schemaPath = err.schemaPath;
-            msg =
-              (err.instancePath
-                ? err.instancePath.slice(1).replace(/\//g, ".") + " "
-                : "") + err.message;
+            msg = errorMessage(err);
           }
         }
 
@@ -119,8 +147,27 @@ export function serviceWithSchema<
 
       if (!responseSchema(result)) {
         const errors = responseSchema.errors;
-        console.log("result errors", errors);
-        throw new Error("invalid response");
+
+        if (strictResponseValidation) {
+          const errors = requestSchema.errors;
+          let msg = "response schema validation error";
+
+          const params: ValidationErrorParams = {};
+          if (Array.isArray(errors)) {
+            const err = errors[0];
+            if (err) {
+              params.instancePath = err.instancePath;
+              params.schemaPath = err.schemaPath;
+              msg = errorMessage(err);
+            }
+          }
+
+          throw new ResponseValidationError(msg, params);
+        } else {
+          logger.warn(
+            `rpc response schema validation errors: ${JSON.stringify(errors)}`
+          );
+        }
       }
 
       return result;
@@ -131,4 +178,12 @@ export function serviceWithSchema<
     implementation,
     meta: serviceDetails,
   };
+}
+
+function errorMessage(err: ErrorObject): string {
+  return (
+    (err.instancePath
+      ? err.instancePath.slice(1).replace(/\//g, ".") + " "
+      : "") + err.message
+  );
 }
