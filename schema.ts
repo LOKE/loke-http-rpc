@@ -107,6 +107,10 @@ export function serviceWithSchema<
   for (const [methodName, methodMeta] of Object.entries(serviceMeta.methods)) {
     const requestSchema = ajv.compile({
       definitions: serviceMeta?.definitions,
+      // Be liberal in what we accept, but let the consumer service force strict
+      // if needed
+      // https://en.wikipedia.org/wiki/Robustness_principle
+      additionalProperties: true,
       ...methodMeta?.requestTypeDef,
     });
 
