@@ -93,7 +93,7 @@ test("should validate schemas", async (t) => {
             responseTypeDef: { ref: "User" },
           },
         },
-        logger: { warn: t.log },
+        logger: { error: t.log },
       }),
       serviceWithSchema<Service2, Defs>(service2, {
         name: "service2",
@@ -117,7 +117,7 @@ test("should validate schemas", async (t) => {
             responseTypeDef: { type: "string" },
           },
         },
-        logger: { warn: t.log },
+        logger: { error: t.log },
       }),
     ]),
     createErrorHandler()
