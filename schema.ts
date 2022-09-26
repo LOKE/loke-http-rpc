@@ -69,7 +69,7 @@ type Methods<
 };
 
 interface Logger {
-  warn: (str: string) => void;
+  error: (str: string) => void;
 }
 
 export function serviceWithSchema<
@@ -164,7 +164,7 @@ export function serviceWithSchema<
 
           throw new ResponseValidationError(msg, params);
         } else {
-          logger.warn(
+          logger.error(
             `rpc response schema validation errors: ${JSON.stringify(errors)}`
           );
         }
