@@ -140,6 +140,7 @@ type Defs = { Thing: Thing };
 // type Service = {}
 const myRpcService = serviceWithSchema<typeof myService, Defs>(myService, {
   name: "my-service",
+  logger: console,
   // Record<string, JTD>
   definitions: {
     Thing: {
