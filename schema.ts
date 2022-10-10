@@ -99,7 +99,7 @@ export function serviceWithSchema<
 
   const serviceDetails: ServiceDetails<S, Def> = {
     service: serviceMeta.name,
-    definitions: serviceMeta?.definitions,
+    definitions: serviceMeta.definitions,
     expose: [],
   };
 
@@ -108,16 +108,25 @@ export function serviceWithSchema<
     strictResponseValidation = process.env.NODE_ENV !== "production",
   } = serviceMeta;
 
-  for (const [methodName, methodMeta] of Object.entries(serviceMeta.methods)) {
+  const methods: [
+    string,
+    MethodDetails<unknown, unknown, Def>
+  ][] = Object.entries(serviceMeta.methods);
+
+  for (const [methodName, methodMeta] of methods) {
     let requestSchema: ValidateFunction;
     try {
       requestSchema = ajv.compile({
-        definitions: serviceMeta?.definitions,
+        definitions: serviceMeta.definitions,
         // Be liberal in what we accept, but let the consumer service force strict
         // if needed
         // https://en.wikipedia.org/wiki/Robustness_principle
-        additionalProperties: true,
-        ...methodMeta?.requestTypeDef,
+        // this is a bit of a mess, default to additionalProperties true if schema has properties
+        ...("properties" in (methodMeta.requestTypeDef || {})
+          ? { additionalProperties: true }
+          : undefined),
+
+        ...methodMeta.requestTypeDef,
       });
     } catch (err: any) {
       throw new Error(
@@ -128,8 +137,8 @@ export function serviceWithSchema<
     let responseSchema: ValidateFunction;
     try {
       responseSchema = ajv.compile({
-        definitions: serviceMeta?.definitions,
-        ...methodMeta?.responseTypeDef,
+        definitions: serviceMeta.definitions,
+        ...methodMeta.responseTypeDef,
       });
     } catch (err: any) {
       throw new Error(

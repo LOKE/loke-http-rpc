@@ -43,10 +43,22 @@ test("should validate schemas", async (t) => {
     async baz(x: { msg: string; user?: User }) {
       return `success ${x.msg}`;
     }
+    async refReq(x: User): Promise<User> {
+      throw new Error("for types only");
+    }
+    async noSchema() {
+      return;
+    }
+    async unlisted() {
+      return;
+    }
   }
 
   type Service2 = {
     baz: (x: { msg: string; user?: User }) => Promise<string>;
+    refReq: (x: User) => Promise<User>;
+    noSchema: () => Promise<void>;
+    unlisted: () => Promise<void>;
   };
 
   //   interface Service2 {
@@ -116,6 +128,11 @@ test("should validate schemas", async (t) => {
             },
             responseTypeDef: { type: "string" },
           },
+          refReq: {
+            requestTypeDef: { ref: "User" },
+            responseTypeDef: { ref: "User" },
+          },
+          noSchema: {},
         },
         logger: { error: t.log },
       }),
@@ -133,6 +150,14 @@ test("should validate schemas", async (t) => {
 
   t.deepEqual(body, { name: "1" });
 
+  // Methods with no schema should still work
+  await got
+    .post(`${serverAddress}/rpc/service2/noSchema`, {
+      json: {},
+    })
+    .json();
+
+  // Methods with invalid requests should fail
   const err: HTTPError = await t.throwsAsync(() =>
     got
       .post(`${serverAddress}/rpc/service1/bar`, {
@@ -148,4 +173,13 @@ test("should validate schemas", async (t) => {
     instancePath: "/user/name",
     schemaPath: "/definitions/User/properties/name/type",
   });
+
+  // Unlisted methods should fail
+  await t.throwsAsync(() =>
+    got
+      .post(`${serverAddress}/rpc/service2/unlisted`, {
+        json: {},
+      })
+      .json()
+  );
 });
