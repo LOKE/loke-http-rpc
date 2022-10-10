@@ -43,7 +43,10 @@ test("should validate schemas", async (t) => {
     async baz(x: { msg: string; user?: User }) {
       return `success ${x.msg}`;
     }
-    async refReq(x: User): Promise<User> {
+    async badResponse(): Promise<User> {
+      return ({ username: 123 } as unknown) as User;
+    }
+    async refReq(): Promise<User> {
       throw new Error("for types only");
     }
     async noSchema() {
@@ -57,6 +60,7 @@ test("should validate schemas", async (t) => {
   type Service2 = {
     baz: (x: { msg: string; user?: User }) => Promise<string>;
     refReq: (x: User) => Promise<User>;
+    badResponse: () => Promise<User>;
     noSchema: () => Promise<void>;
     unlisted: () => Promise<void>;
   };
@@ -128,6 +132,9 @@ test("should validate schemas", async (t) => {
             },
             responseTypeDef: { type: "string" },
           },
+          badResponse: {
+            responseTypeDef: { ref: "User" },
+          },
           refReq: {
             requestTypeDef: { ref: "User" },
             responseTypeDef: { ref: "User" },
@@ -158,21 +165,42 @@ test("should validate schemas", async (t) => {
     .json();
 
   // Methods with invalid requests should fail
-  const err: HTTPError = await t.throwsAsync(() =>
-    got
-      .post(`${serverAddress}/rpc/service1/bar`, {
-        json: { message: "c", user: { name: 1 } },
-      })
-      .json()
-  );
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/service1/bar`, {
+          json: { message: "c", user: { name: 1 } },
+        })
+        .json()
+    );
 
-  t.deepEqual(JSON.parse(err.response.body as string), {
-    message: "user.name must be string",
-    code: "validation",
-    type: "https://errors.loke.global/@loke/http-rpc/validation",
-    instancePath: "/user/name",
-    schemaPath: "/definitions/User/properties/name/type",
-  });
+    t.deepEqual(JSON.parse(err.response.body as string), {
+      message: "user.name must be string",
+      code: "validation",
+      type: "https://errors.loke.global/@loke/http-rpc/validation",
+      instancePath: "/user/name",
+      schemaPath: "/definitions/User/properties/name/type",
+    });
+  }
+
+  // Methods with invalid response should fail (can be turned off)
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/service2/badResponse`, {
+          json: {},
+        })
+        .json()
+    );
+
+    t.deepEqual(JSON.parse(err.response.body as string), {
+      message: "must have property 'name'",
+      code: "response-validation",
+      type: "https://errors.loke.global/@loke/http-rpc/response-validation",
+      instancePath: "",
+      schemaPath: "/definitions/User/properties/name",
+    });
+  }
 
   // Unlisted methods should fail
   await t.throwsAsync(() =>

@@ -39,7 +39,7 @@ class ResponseValidationError extends Error {
   constructor(message: string, params: ValidationErrorParams) {
     super(message);
 
-    this.code = "validation";
+    this.code = "response-validation";
     this.type = "https://errors.loke.global/@loke/http-rpc/response-validation";
     Object.defineProperty(this, "message", {
       enumerable: true,
@@ -180,7 +180,7 @@ export function serviceWithSchema<
         const errors = responseSchema.errors;
 
         if (strictResponseValidation) {
-          const errors = requestSchema.errors;
+          const errors = responseSchema.errors;
           let msg = "response schema validation error";
 
           const params: ValidationErrorParams = {};
