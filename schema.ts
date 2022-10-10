@@ -184,6 +184,11 @@ export function serviceWithSchema<
   };
 }
 
+// errorMessage formats an error message from an AJV JTD error object
+// example
+//   { message : "should be string", instancePath : "/user/name" }
+// becomes
+//   "user.name should be string"
 function errorMessage(err: ErrorObject): string {
   return (
     (err.instancePath
