@@ -1,4 +1,8 @@
-import Ajv, { ErrorObject, JTDSchemaType } from "ajv/dist/jtd";
+import Ajv, {
+  ErrorObject,
+  JTDSchemaType,
+  ValidateFunction,
+} from "ajv/dist/jtd";
 import { ServiceSet, Service, ServiceDetails } from "./common";
 
 interface ValidationErrorParams {
@@ -105,19 +109,33 @@ export function serviceWithSchema<
   } = serviceMeta;
 
   for (const [methodName, methodMeta] of Object.entries(serviceMeta.methods)) {
-    const requestSchema = ajv.compile({
-      definitions: serviceMeta?.definitions,
-      // Be liberal in what we accept, but let the consumer service force strict
-      // if needed
-      // https://en.wikipedia.org/wiki/Robustness_principle
-      additionalProperties: true,
-      ...methodMeta?.requestTypeDef,
-    });
+    let requestSchema: ValidateFunction;
+    try {
+      requestSchema = ajv.compile({
+        definitions: serviceMeta?.definitions,
+        // Be liberal in what we accept, but let the consumer service force strict
+        // if needed
+        // https://en.wikipedia.org/wiki/Robustness_principle
+        additionalProperties: true,
+        ...methodMeta?.requestTypeDef,
+      });
+    } catch (err: any) {
+      throw new Error(
+        `failed to compile "${methodName}" request schema: ${err.message}`
+      );
+    }
 
-    const responseSchema = ajv.compile({
-      definitions: serviceMeta?.definitions,
-      ...methodMeta?.responseTypeDef,
-    });
+    let responseSchema: ValidateFunction;
+    try {
+      responseSchema = ajv.compile({
+        definitions: serviceMeta?.definitions,
+        ...methodMeta?.responseTypeDef,
+      });
+    } catch (err: any) {
+      throw new Error(
+        `failed to compile "${methodName}" response schema: ${err.message}`
+      );
+    }
 
     serviceDetails.expose.push({
       methodName,
