@@ -1,6 +1,16 @@
 import { Histogram, Counter } from "prom-client";
 import { RequestHandler, ErrorRequestHandler } from "express";
-import { ServiceSet, ServiceDetails, MethodDetails } from "./common";
+import { Abortable } from "@loke/context";
+import * as context from "@loke/context";
+import onFinished from "on-finished";
+import { randomBytes } from "crypto";
+
+import {
+  ServiceSet,
+  ServiceDetails,
+  MethodDetails,
+  requestContexts,
+} from "./common";
 
 export {
   ServiceSet,
@@ -152,9 +162,30 @@ export function createRequestHandler(
       const postHandler: RequestHandler = async (req, res, next) => {
         const end = requestDuration.startTimer(requestMeta);
 
+        let abortable: Abortable | null = null;
         try {
           requestCount.inc(requestMeta);
 
+          const requestDeadline = first(req.headers["x-request-deadline"]);
+
+          if (requestDeadline) {
+            abortable = context.withDeadline(
+              context.background,
+              Date.parse(requestDeadline)
+            );
+          } else {
+            abortable = context.withAbort(context.background);
+          }
+
+          const ctx = context.withValues(abortable.ctx, {
+            [context.requestIdKey]:
+              req.headers["x-request-id"] ||
+              randomBytes(6).toString("base64url"),
+          });
+
+          onFinished(res as any, () => abortable?.abort());
+
+          requestContexts.set(req.body, ctx);
           const result = await methodFn(req.body);
 
           res.json(result);
@@ -163,6 +194,7 @@ export function createRequestHandler(
           next(new RpcError(serviceName, methodName, err));
         } finally {
           end();
+          abortable?.abort();
         }
       };
 
@@ -217,4 +249,9 @@ export function createErrorHandler(
 
     return res.status(400).json(err.inner);
   };
+}
+
+function first(s: string | string[] | undefined) {
+  if (!s) return undefined;
+  return Array.isArray(s) ? s[0] : s;
 }
