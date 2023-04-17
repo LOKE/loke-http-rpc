@@ -5,8 +5,12 @@ import bodyParser from "body-parser";
 import got, { HTTPError } from "got";
 import { Context } from "@loke/context";
 import * as context from "@loke/context";
-import { createErrorHandler, createRequestHandler } from "../";
-import { serviceWithSchema, contextServiceWithSchema } from "../schema";
+import {
+  createErrorHandler,
+  createRequestHandler,
+  serviceWithSchema,
+  contextServiceWithSchema,
+} from "../";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inspect = (req: any, res: any, next: () => void) => {
