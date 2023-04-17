@@ -108,129 +108,20 @@ export function contextServiceWithSchema<
     strictResponseValidation?: boolean;
   }
 ): ServiceSet<any> {
-  const ajv = new Ajv();
+  const wrappedService: Service = {};
 
-  const implementation: {
-    [methodName: string]: (args: unknown) => Promise<unknown>;
-  } = {};
-
-  const serviceDetails: ServiceDetails<S, Def> = {
-    service: serviceMeta.name,
-    definitions: serviceMeta.definitions,
-    expose: [],
-  };
-
-  const {
-    logger,
-    strictResponseValidation = process.env.NODE_ENV !== "production",
-  } = serviceMeta;
-
-  const methods: [
-    string,
-    MethodDetails<unknown, unknown, Def>
-  ][] = Object.entries(serviceMeta.methods);
-
-  for (const [methodName, methodMeta] of methods) {
-    let requestSchema: ValidateFunction;
-    try {
-      requestSchema = ajv.compile({
-        definitions: serviceMeta.definitions,
-        // Be liberal in what we accept, but let the consumer service force strict
-        // if needed
-        // https://en.wikipedia.org/wiki/Robustness_principle
-        // this is a bit of a mess, default to additionalProperties true if schema has properties
-        ...("properties" in (methodMeta.requestTypeDef || {})
-          ? { additionalProperties: true }
-          : undefined),
-
-        ...methodMeta.requestTypeDef,
-      });
-    } catch (err: any) {
-      throw new Error(
-        `failed to compile "${methodName}" request schema: ${err.message}`
-      );
-    }
-
-    let responseSchema: ValidateFunction;
-    try {
-      responseSchema = ajv.compile({
-        definitions: serviceMeta.definitions,
-        ...methodMeta.responseTypeDef,
-      });
-    } catch (err: any) {
-      throw new Error(
-        `failed to compile "${methodName}" response schema: ${err.message}`
-      );
-    }
-
-    serviceDetails.expose.push({
-      methodName,
-      methodTimeout: methodMeta.methodTimeout,
-      help: methodMeta.help,
-      requestTypeDef: methodMeta.requestTypeDef,
-      responseTypeDef: methodMeta.responseTypeDef,
-    });
-
-    const endpoint = service[methodName].bind(service);
-
-    implementation[methodName] = async (args: unknown) => {
-      if (!requestSchema(args)) {
-        const errors = requestSchema.errors;
-        let msg = "request schema validation error";
-
-        const params: ValidationErrorParams = {};
-        if (Array.isArray(errors)) {
-          const err = errors[0];
-          if (err) {
-            params.instancePath = err.instancePath;
-            params.schemaPath = err.schemaPath;
-            msg = errorMessage(err);
-          }
-        }
-
-        throw new ValidationError(msg, params);
-      }
-
+  for (const methodName of Object.keys(serviceMeta.methods)) {
+    wrappedService[methodName] = async (args: unknown) => {
       const ctx = requestContexts.get(args as object);
       if (!ctx) {
         throw new Error("missing request context");
       }
 
-      const result = await endpoint(ctx, args);
-
-      if (!responseSchema(result)) {
-        const errors = responseSchema.errors;
-
-        if (strictResponseValidation) {
-          const errors = responseSchema.errors;
-          let msg = "response schema validation error";
-
-          const params: ValidationErrorParams = {};
-          if (Array.isArray(errors)) {
-            const err = errors[0];
-            if (err) {
-              params.instancePath = err.instancePath;
-              params.schemaPath = err.schemaPath;
-              msg = errorMessage(err);
-            }
-          }
-
-          throw new ResponseValidationError(msg, params);
-        } else {
-          logger.error(
-            `rpc response schema validation errors: ${JSON.stringify(errors)}`
-          );
-        }
-      }
-
-      return result;
+      return await service[methodName](ctx, args);
     };
   }
 
-  return {
-    implementation,
-    meta: serviceDetails,
-  };
+  return serviceWithSchema(wrappedService, serviceMeta);
 }
 
 export function serviceWithSchema<

@@ -18,8 +18,10 @@ export {
   MethodDetails,
   Service,
   Method,
+  ContextMethod,
+  ContextService,
 } from "./common";
-export { serviceWithSchema } from "./schema";
+export { serviceWithSchema, contextServiceWithSchema } from "./schema";
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",

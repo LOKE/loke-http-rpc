@@ -39,7 +39,7 @@ test("basic integration test", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }])
   );
@@ -82,7 +82,7 @@ test("legacy mode should expose methods under the root path", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true })
   );
@@ -113,7 +113,7 @@ test("legacy mode should ALSO expose methods under the new nested path", async (
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true })
   );
@@ -150,7 +150,7 @@ Can include **Markdown**.`,
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }])
   );
@@ -210,7 +210,7 @@ Can include **Markdown**.`,
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true })
   );
@@ -281,7 +281,7 @@ test("exposes metadata for all services in handler", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([service1, service2])
   );
