@@ -107,28 +107,31 @@ Also, to list runtime RPC metadata you can GET /rpc
 curl -X GET http://localhost:5000/rpc
 ```
 
-## Schemas
+## Schemas and Context
 
 Since v5.1.0 we now support
 [JTD Schemas](https://jsontypedef.com/docs/jtd-in-5-minutes/) for requests and
 responses validation (Via [AJV](https://ajv.js.org/json-type-definition.html)).
 
+Since v5.3.0 we now support passing a context object to the service methods. Use `serviceWithSchema` if you don't want to use the context.
+
 ```ts
-const {
+import {
   createRequestHandler,
   createErrorHandler,
   serviceWithSchema,
-} = require("@loke/http-rpc");
+} from "@loke/http-rpc";
+import { Context } from "@loke/context";
 
 interface Thing {
   name: string;
 }
 
 const myService = {
-  async doStuff(args: {}) {
+  async doStuff(ctx: Context, args: {}) {
     return await Promise.resolve("stuff done");
   },
-  async getThing(args: { name: string }): Promise<Thing> {
+  async getThing(ctx: Context, args: { name: string }): Promise<Thing> {
     return { name: args.name };
   },
 };
@@ -138,35 +141,38 @@ type Defs = { Thing: Thing };
 
 // instead of `typeof myService` you could also name a type like
 // type Service = {}
-const myRpcService = serviceWithSchema<typeof myService, Defs>(myService, {
-  name: "my-service",
-  logger: console,
-  // Record<string, JTD>
-  definitions: {
-    Thing: {
-      properties: {
-        name: { type: "string" },
+const myRpcService = contextServiceWithSchema<typeof myService, Defs>(
+  myService,
+  {
+    name: "my-service",
+    logger: console,
+    // Record<string, JTD>
+    definitions: {
+      Thing: {
+        properties: {
+          name: { type: "string" },
+        },
       },
     },
-  },
-  methods: {
-    doStuff: {
-      help: "This is a silly method",
-      // JTD
-      requestTypeDef: {
-        properties: {},
+    methods: {
+      doStuff: {
+        help: "This is a silly method",
+        // JTD
+        requestTypeDef: {
+          properties: {},
+        },
+        responseTypeDef: { type: "string" },
       },
-      responseTypeDef: { type: "string" },
-    },
-    getThing: {
-      help: "Get a thing",
-      requestTypeDef: {
-        properties: { name: { type: "string" } },
+      getThing: {
+        help: "Get a thing",
+        requestTypeDef: {
+          properties: { name: { type: "string" } },
+        },
+        responseTypeDef: { ref: "Thing" },
       },
-      responseTypeDef: { ref: "Thing" },
     },
-  },
-});
+  }
+);
 
 const rpcHandler = createRequestHandler([myRpcService]);
 

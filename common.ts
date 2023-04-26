@@ -1,6 +1,10 @@
 import { JTDSchemaType } from "ajv/dist/jtd";
+import { Context } from "@loke/context";
+
+export const requestContexts = new WeakMap<object, Context>();
 
 export type Method<A = any, R = any> = (args: A) => R;
+export type ContextMethod<A = any, R = any> = (ctx: Context, args: A) => R;
 
 export interface MethodDetails {
   methodName: string;
@@ -26,6 +30,10 @@ export interface ServiceDetails<
 
 export interface Service {
   [methodName: string]: Method;
+}
+
+export interface ContextService {
+  [methodName: string]: ContextMethod;
 }
 
 export interface ServiceSet<S extends Service> {

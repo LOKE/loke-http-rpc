@@ -3,7 +3,13 @@ import Ajv, {
   JTDSchemaType,
   ValidateFunction,
 } from "ajv/dist/jtd";
-import { ServiceSet, Service, ServiceDetails } from "./common";
+import {
+  ServiceSet,
+  Service,
+  ContextService,
+  ServiceDetails,
+  requestContexts,
+} from "./common";
 
 interface ValidationErrorParams {
   instancePath?: string;
@@ -72,8 +78,50 @@ type Methods<
   >;
 };
 
+type ContextMethods<
+  S extends ContextService,
+  Def extends Record<string, unknown> = Record<string, never>
+> = {
+  [K in keyof S]?: MethodDetails<
+    Parameters<S[K]>[1],
+    Awaited<ReturnType<S[K]>>,
+    Def
+  >;
+};
+
 interface Logger {
   error: (str: string) => void;
+}
+
+export function contextServiceWithSchema<
+  S extends ContextService,
+  Def extends Record<string, unknown> = Record<string, never>
+>(
+  service: S,
+  serviceMeta: {
+    name: string;
+    definitions?: {
+      [K in keyof Def]: JTDSchemaType<Def[K], Def>;
+    };
+    methods: ContextMethods<S, Def>;
+    logger: Logger;
+    strictResponseValidation?: boolean;
+  }
+): ServiceSet<any> {
+  const wrappedService: Service = {};
+
+  for (const methodName of Object.keys(serviceMeta.methods)) {
+    wrappedService[methodName] = async (args: unknown) => {
+      const ctx = requestContexts.get(args as object);
+      if (!ctx) {
+        throw new Error("missing request context");
+      }
+
+      return await service[methodName](ctx, args);
+    };
+  }
+
+  return serviceWithSchema(wrappedService, serviceMeta);
 }
 
 export function serviceWithSchema<

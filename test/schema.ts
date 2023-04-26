@@ -3,8 +3,14 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got, { HTTPError } from "got";
-import { createErrorHandler, createRequestHandler } from "../";
-import { serviceWithSchema } from "../schema";
+import { Context } from "@loke/context";
+import * as context from "@loke/context";
+import {
+  createErrorHandler,
+  createRequestHandler,
+  serviceWithSchema,
+  contextServiceWithSchema,
+} from "../";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inspect = (req: any, res: any, next: () => void) => {
@@ -79,7 +85,7 @@ test("should validate schemas", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([
       {
@@ -210,4 +216,81 @@ test("should validate schemas", async (t) => {
       })
       .json()
   );
+});
+
+test("test context", async (t) => {
+  const app = express();
+
+  let lastReqId: string | undefined;
+  let lastDeadline: number | undefined;
+
+  const service1 = {
+    bar: async (
+      ctx: Context,
+      args: { message: string; user: User; thing: any }
+    ) => {
+      lastReqId = context.getRequestId(ctx);
+      lastDeadline = ctx.deadline;
+      return args.user;
+    },
+  };
+
+  interface User {
+    name: string;
+  }
+
+  type Defs = { User: User };
+
+  app.use(
+    "/rpc",
+    bodyParser.json() as any,
+    inspect,
+    createRequestHandler([
+      contextServiceWithSchema<typeof service1, Defs>(service1, {
+        name: "service1",
+        definitions: {
+          User: {
+            properties: {
+              name: { type: "string" },
+            },
+          },
+        },
+        methods: {
+          bar: {
+            requestTypeDef: {
+              properties: {
+                message: { type: "string" },
+                user: { ref: "User" },
+              },
+              optionalProperties: {
+                thing: {},
+              },
+            },
+            responseTypeDef: { ref: "User" },
+          },
+        },
+        logger: { error: t.log },
+      }),
+    ]),
+    createErrorHandler()
+  );
+
+  const serverAddress = createServerAddress(app);
+
+  // Can't use static because setTimeout maxes out at 32 bits (~24 days)
+  const deadline = new Date(Date.now() + 1000 * 60);
+
+  const body = await got
+    .post(`${serverAddress}/rpc/service1/bar`, {
+      headers: {
+        "x-request-id": "the-request-id",
+        "x-request-deadline": deadline.toISOString(),
+      },
+      json: { message: "world", user: { name: "1" } },
+    })
+    .json();
+
+  t.is(lastReqId, "the-request-id");
+  t.is(lastDeadline, deadline.getTime());
+  t.deepEqual(body, { name: "1" });
 });

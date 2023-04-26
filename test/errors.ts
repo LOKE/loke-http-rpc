@@ -39,7 +39,7 @@ test("passes through messages", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
     createErrorHandler()
@@ -75,7 +75,7 @@ test("passes through codes if available and makes them exposed", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
     createErrorHandler()
@@ -116,7 +116,7 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
     createErrorHandler()
@@ -163,7 +163,7 @@ test("passes through @loke/errors serialized in full", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
     createErrorHandler()
@@ -215,7 +215,7 @@ test("logs error stacktraces if not exposed", async (t) => {
 
   app.use(
     "/rpc",
-    bodyParser.json(),
+    bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
     createErrorHandler({ log })
