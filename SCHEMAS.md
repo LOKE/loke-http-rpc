@@ -89,17 +89,17 @@ When installing the above with the LOKE cli it will generate the following types
 
 ```typescript
 // types created by definitions
-export Type CreateCustomerRequest = {
+export type CreateCustomerRequest = {
   name: string;
 }
 
-export Type Customer {
+export type Customer {
   id: string;
   name: string;
 }
 
 // request type created by LOKE cli, response type is Customer above
-export Type CreateCustomerRequest = {
+export type CreateCustomerRequest = {
   orgId: string;
   request: CreateCustomerRequest
 }
