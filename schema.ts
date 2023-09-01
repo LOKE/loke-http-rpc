@@ -143,7 +143,15 @@ export function serviceWithSchema<
     strictResponseValidation?: boolean;
   }
 ): ServiceSet<any> {
-  const ajv = new Ajv({ keywords: ["void"] });
+  const ajv = new Ajv({
+    keywords: [
+      {
+        keyword: "void",
+        validate: (_: unknown, data: unknown) => data === undefined,
+        errors: false,
+      },
+    ],
+  });
 
   const implementation: {
     [methodName: string]: (args: unknown) => Promise<unknown>;
@@ -231,20 +239,7 @@ export function serviceWithSchema<
 
       const result = await endpoint(args);
 
-      if (methodMeta.responseTypeDef === voidSchema) {
-        if (result != undefined) {
-          if (strictResponseValidation) {
-            throw new ResponseValidationError("must return void", {
-              instancePath: "",
-              schemaPath: "",
-            });
-          } else {
-            logger.error(
-              `rpc response schema validation errors: ${serviceMeta.name}.${methodName} result should be void`
-            );
-          }
-        }
-      } else if (!responseSchema(result)) {
+      if (!responseSchema(result)) {
         const errors = responseSchema.errors;
 
         if (strictResponseValidation) {

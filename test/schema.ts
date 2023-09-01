@@ -218,11 +218,11 @@ test("should validate schemas", async (t) => {
     );
 
     t.deepEqual(JSON.parse(err.response.body as string), {
-      message: "must return void",
+      message: 'must pass "void" keyword validation',
       code: "response-validation",
       type: "https://errors.loke.global/@loke/http-rpc/response-validation",
       instancePath: "",
-      schemaPath: "",
+      schemaPath: "/metadata/void",
     });
   }
 
