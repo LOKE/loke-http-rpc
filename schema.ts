@@ -16,6 +16,10 @@ interface ValidationErrorParams {
   schemaPath?: string;
 }
 
+export const voidSchema = { metadata: { void: true } } as const;
+
+export type VoidSchema = typeof voidSchema;
+
 class ValidationError extends Error {
   type: string;
   code: string;
@@ -64,7 +68,7 @@ export interface MethodDetails<
   methodTimeout?: number;
   help?: string;
   requestTypeDef?: JTDSchemaType<Req, Def>;
-  responseTypeDef?: JTDSchemaType<Res, Def>;
+  responseTypeDef?: JTDSchemaType<Res, Def> | VoidSchema;
 }
 
 type Methods<
@@ -139,7 +143,7 @@ export function serviceWithSchema<
     strictResponseValidation?: boolean;
   }
 ): ServiceSet<any> {
-  const ajv = new Ajv();
+  const ajv = new Ajv({ keywords: ["void"] });
 
   const implementation: {
     [methodName: string]: (args: unknown) => Promise<unknown>;
@@ -184,10 +188,13 @@ export function serviceWithSchema<
 
     let responseSchema: ValidateFunction;
     try {
-      responseSchema = ajv.compile({
-        definitions: serviceMeta.definitions,
-        ...methodMeta.responseTypeDef,
-      });
+      responseSchema = ajv.compile(
+        {
+          definitions: serviceMeta.definitions,
+          ...methodMeta.responseTypeDef,
+        },
+        true
+      );
     } catch (err: any) {
       throw new Error(
         `failed to compile "${methodName}" response schema: ${err.message}`
@@ -224,7 +231,20 @@ export function serviceWithSchema<
 
       const result = await endpoint(args);
 
-      if (!responseSchema(result)) {
+      if (methodMeta.responseTypeDef === voidSchema) {
+        if (result != undefined) {
+          if (strictResponseValidation) {
+            throw new ResponseValidationError("must return void", {
+              instancePath: "",
+              schemaPath: "",
+            });
+          } else {
+            logger.error(
+              `rpc response schema validation errors: ${serviceMeta.name}.${methodName} result should be void`
+            );
+          }
+        }
+      } else if (!responseSchema(result)) {
         const errors = responseSchema.errors;
 
         if (strictResponseValidation) {
@@ -244,7 +264,9 @@ export function serviceWithSchema<
           throw new ResponseValidationError(msg, params);
         } else {
           logger.error(
-            `rpc response schema validation errors: ${JSON.stringify(errors)}`
+            `rpc response schema validation errors: ${
+              serviceMeta.name
+            }.${methodName} ${JSON.stringify(errors)}`
           );
         }
       }
