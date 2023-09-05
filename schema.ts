@@ -196,13 +196,10 @@ export function serviceWithSchema<
 
     let responseSchema: ValidateFunction;
     try {
-      responseSchema = ajv.compile(
-        {
-          definitions: serviceMeta.definitions,
-          ...methodMeta.responseTypeDef,
-        },
-        true
-      );
+      responseSchema = ajv.compile({
+        definitions: serviceMeta.definitions,
+        ...methodMeta.responseTypeDef,
+      });
     } catch (err: any) {
       throw new Error(
         `failed to compile "${methodName}" response schema: ${err.message}`
