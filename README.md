@@ -113,6 +113,8 @@ Since v5.1.0 we now support
 [JTD Schemas](https://jsontypedef.com/docs/jtd-in-5-minutes/) for requests and
 responses validation (Via [AJV](https://ajv.js.org/json-type-definition.html)).
 
+For more in-depth information about using the schema see `SCHEMAS.md`.
+
 Since v5.3.0 we now support passing a context object to the service methods. Use `serviceWithSchema` if you don't want to use the context.
 
 ```ts
