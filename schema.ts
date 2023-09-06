@@ -16,6 +16,10 @@ interface ValidationErrorParams {
   schemaPath?: string;
 }
 
+export const voidSchema = { metadata: { void: true } } as const;
+
+export type VoidSchema = typeof voidSchema;
+
 class ValidationError extends Error {
   type: string;
   code: string;
@@ -64,7 +68,7 @@ export interface MethodDetails<
   methodTimeout?: number;
   help?: string;
   requestTypeDef?: JTDSchemaType<Req, Def>;
-  responseTypeDef?: JTDSchemaType<Res, Def>;
+  responseTypeDef?: JTDSchemaType<Res, Def> | VoidSchema;
 }
 
 type Methods<
@@ -139,7 +143,15 @@ export function serviceWithSchema<
     strictResponseValidation?: boolean;
   }
 ): ServiceSet<any> {
-  const ajv = new Ajv();
+  const ajv = new Ajv({
+    keywords: [
+      {
+        keyword: "void",
+        validate: (_: unknown, data: unknown) => data === undefined,
+        errors: false,
+      },
+    ],
+  });
 
   const implementation: {
     [methodName: string]: (args: unknown) => Promise<unknown>;
@@ -244,7 +256,9 @@ export function serviceWithSchema<
           throw new ResponseValidationError(msg, params);
         } else {
           logger.error(
-            `rpc response schema validation errors: ${JSON.stringify(errors)}`
+            `rpc response schema validation errors: ${
+              serviceMeta.name
+            }.${methodName} ${JSON.stringify(errors)}`
           );
         }
       }

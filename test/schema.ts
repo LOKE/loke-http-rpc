@@ -10,6 +10,7 @@ import {
   createRequestHandler,
   serviceWithSchema,
   contextServiceWithSchema,
+  voidSchema,
 } from "../";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,6 +56,12 @@ test("should validate schemas", async (t) => {
     async refReq(): Promise<User> {
       throw new Error("for types only");
     }
+    async voidSchema(args: { bad?: boolean }) {
+      if (args.bad) {
+        return 1 as any; // bad void
+      }
+      return;
+    }
     async noSchema() {
       return;
     }
@@ -67,6 +74,7 @@ test("should validate schemas", async (t) => {
     baz: (x: { msg: string; user?: User }) => Promise<string>;
     refReq: (x: User) => Promise<User>;
     badResponse: () => Promise<User>;
+    voidSchema: (args: { bad?: boolean }) => Promise<void>;
     noSchema: () => Promise<void>;
     unlisted: () => Promise<void>;
   };
@@ -145,6 +153,9 @@ test("should validate schemas", async (t) => {
             requestTypeDef: { ref: "User" },
             responseTypeDef: { ref: "User" },
           },
+          voidSchema: {
+            responseTypeDef: voidSchema,
+          },
           noSchema: {},
         },
         logger: { error: t.log },
@@ -162,6 +173,13 @@ test("should validate schemas", async (t) => {
     .json();
 
   t.deepEqual(body, { name: "1" });
+
+  // Methods with void schema should work
+  await got
+    .post(`${serverAddress}/rpc/service2/voidSchema`, {
+      json: {},
+    })
+    .json();
 
   // Methods with no schema should still work
   await got
@@ -186,6 +204,25 @@ test("should validate schemas", async (t) => {
       type: "https://errors.loke.global/@loke/http-rpc/validation",
       instancePath: "/user/name",
       schemaPath: "/definitions/User/properties/name/type",
+    });
+  }
+
+  // Methods with invalid void should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/service2/voidSchema`, {
+          json: { bad: true },
+        })
+        .json()
+    );
+
+    t.deepEqual(JSON.parse(err.response.body as string), {
+      message: 'must pass "void" keyword validation',
+      code: "response-validation",
+      type: "https://errors.loke.global/@loke/http-rpc/response-validation",
+      instancePath: "",
+      schemaPath: "/metadata/void",
     });
   }
 

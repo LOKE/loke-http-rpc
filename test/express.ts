@@ -31,9 +31,15 @@ test("basic integration test", async (t) => {
     hello: (x: { msg: string }) => {
       return `success ${x.msg}`;
     },
+    voidMethod: () => {
+      return;
+    },
+    nullMethod: () => {
+      return null;
+    },
   };
   const meta: ServiceDetails<typeof implementation> = {
-    expose: [{ methodName: "hello" }],
+    expose: [{ methodName: "hello" }, { methodName: "voidMethod" }],
     service: "hello-service",
   };
 
@@ -46,13 +52,27 @@ test("basic integration test", async (t) => {
 
   const serverAddress = createServerAddress(app);
 
-  const body = await got
-    .post(`${serverAddress}/rpc/hello-service/hello`, {
-      json: { msg: "world" },
-    })
-    .json();
+  // Basic method
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/hello-service/hello`, {
+        json: { msg: "world" },
+      })
+      .json();
 
-  t.is(body, "success world");
+    t.is(body, "success world");
+  }
+
+  // null method
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/hello-service/voidMethod`, {
+        json: {},
+      })
+      .json();
+
+    t.is(body, null);
+  }
 
   await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/hello-service/missingMethod`, {

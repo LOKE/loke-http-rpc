@@ -21,7 +21,13 @@ export {
   ContextMethod,
   ContextService,
 } from "./common";
-export { serviceWithSchema, contextServiceWithSchema } from "./schema";
+
+export {
+  serviceWithSchema,
+  contextServiceWithSchema,
+  voidSchema,
+  VoidSchema,
+} from "./schema";
 
 const requestDuration = new Histogram({
   name: "http_rpc_request_duration_seconds",
@@ -157,6 +163,10 @@ export function createRequestHandler(
 
       const requestMeta = { handler: `${serviceName}.${methodName}` };
 
+      requestDuration.zero(requestMeta);
+      requestCount.inc(requestMeta, 0);
+      failureCount.inc({ type: "<none>", ...requestMeta }, 0);
+
       const methodFn = service.implementation[methodName].bind(
         service.implementation
       );
@@ -181,7 +191,7 @@ export function createRequestHandler(
 
           const ctx = context.withValues(abortable.ctx, {
             [context.requestIdKey]:
-              req.headers["x-request-id"] ||
+              first(req.headers["x-request-id"]) ||
               randomBytes(6).toString("base64url"),
           });
 
@@ -190,9 +200,10 @@ export function createRequestHandler(
           requestContexts.set(req.body, ctx);
           const result = await methodFn(req.body);
 
-          res.json(result);
+          // Return null for void result to help old clients
+          res.json(result ?? null);
         } catch (err: any) {
-          failureCount.inc(Object.assign({ type: err.type }, requestMeta));
+          failureCount.inc({ type: err.type || "<none>", ...requestMeta });
           next(new RpcError(serviceName, methodName, err));
         } finally {
           end();

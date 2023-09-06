@@ -183,3 +183,31 @@ const errorLogger = (msg) => console.log(msg);
 app.use("/rpc", rpcHandler);
 app.use(createErrorHandler({ log: errorLogger }));
 ```
+
+### Void result schema
+
+Return types of `void` should generally be avoided, but if you need to use them
+you can use `voidSchema` to define the schema for the response.
+
+```ts
+import { voidSchema } from "@loke/http-rpc";
+
+const myService = {
+  async doSomething(): Promise<void> {
+    return;
+  },
+};
+
+const myRpcService = serviceWithSchema(myService, {
+  name: "my-service",
+  logger: console,
+  methods: {
+    doSomething: {
+      requestTypeDef: {
+        properties: {},
+      },
+      responseTypeDef: voidSchema,
+    },
+  },
+});
+```
