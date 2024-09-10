@@ -9,8 +9,9 @@ module.exports = {
     "eslint:recommended",
     "plugin:ava/recommended",
     "plugin:@typescript-eslint/recommended",
-    "plugin:prettier/recommended",
-    "prettier/@typescript-eslint",
   ],
   ignorePatterns: ["dist/**/*"],
+  rules: {
+    "@typescript-eslint/no-explicit-any": "warn",
+  },
 };

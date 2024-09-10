@@ -65,7 +65,7 @@ export class RpcError extends ExtendableError {
 
   constructor(serviceName: string, methodName: string, inner: Error) {
     super(
-      `An error occurred while executing method ${serviceName}/${methodName}`
+      `An error occurred while executing method ${serviceName}/${methodName}`,
     );
     this.serviceName = serviceName;
     this.methodName = methodName;
@@ -74,7 +74,7 @@ export class RpcError extends ExtendableError {
 }
 
 function getExposedMeta<Def extends Record<string, unknown>>(
-  serviceDetails: ServiceDetails<Def>
+  serviceDetails: ServiceDetails<Def>,
 ) {
   return {
     serviceName: serviceDetails.service,
@@ -84,7 +84,7 @@ function getExposedMeta<Def extends Record<string, unknown>>(
     interfaces: serviceDetails.expose.map((method: MethodDetails) => {
       if (typeof method === "string") {
         throw new Error(
-          "Schema for expose has changed. Please refer to @loke/http-rpc documentation."
+          "Schema for expose has changed. Please refer to @loke/http-rpc documentation.",
         );
       }
       const {
@@ -118,7 +118,7 @@ interface CreateRequestHandlerOptions {
 
 export function createRequestHandler(
   services: ServiceSet<any>[],
-  options?: CreateRequestHandlerOptions
+  options?: CreateRequestHandlerOptions,
 ): RequestHandler {
   const { legacy = false } = options || {};
 
@@ -140,7 +140,7 @@ export function createRequestHandler(
   for (const service of services) {
     const serviceName = service.meta.service;
     const serviceMeta = meta.services.find(
-      (s) => s.serviceName === serviceName
+      (s) => s.serviceName === serviceName,
     );
 
     getHandlers.set(`/${serviceName}`, (req, res) => {
@@ -150,7 +150,7 @@ export function createRequestHandler(
     for (const methodDef of service.meta.expose) {
       const { methodName } = methodDef;
       const methodMeta = serviceMeta?.interfaces.find(
-        (s) => s.methodName === methodName
+        (s) => s.methodName === methodName,
       );
 
       const getHandler: RequestHandler = (req, res) => {
@@ -168,7 +168,7 @@ export function createRequestHandler(
       failureCount.inc({ type: "<none>", ...requestMeta }, 0);
 
       const methodFn = service.implementation[methodName].bind(
-        service.implementation
+        service.implementation,
       );
 
       const postHandler: RequestHandler = async (req, res, next) => {
@@ -183,7 +183,7 @@ export function createRequestHandler(
           if (requestDeadline) {
             abortable = context.withDeadline(
               context.background,
-              Date.parse(requestDeadline)
+              Date.parse(requestDeadline),
             );
           } else {
             abortable = context.withAbort(context.background);
@@ -238,7 +238,7 @@ export function createRequestHandler(
 }
 
 export function createErrorHandler(
-  args: { log?: (msg: string) => void } = {}
+  args: { log?: (msg: string) => void } = {},
 ): ErrorRequestHandler {
   const { log = () => undefined } = args;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -252,7 +252,7 @@ export function createErrorHandler(
     log(`Error executing ${source}: ${err.inner.stack}`);
     if (!err.inner.type) {
       log(
-        `Legacy error returned from ${source}: name=${err.inner.name}, code=${err.inner.code}`
+        `Legacy error returned from ${source}: name=${err.inner.name}, code=${err.inner.code}`,
       );
       return res.status(400).json({
         message: err.inner.message,

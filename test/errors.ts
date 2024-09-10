@@ -1,4 +1,4 @@
-import test from "ava";
+import test, { ExecutionContext } from "ava";
 import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
@@ -12,7 +12,7 @@ const inspect = (req: any, res: any, next: () => void) => {
   // console.log(req.body, req.headers); // eslint-disable-line no-console
 };
 
-function createServerAddress(app: Express) {
+function createServerAddress(app: Express, t: ExecutionContext) {
   const server = http.createServer(app);
 
   server.listen(0);
@@ -21,6 +21,10 @@ function createServerAddress(app: Express) {
   if (!address || typeof address !== "object") {
     throw new Error("No server address found");
   }
+
+  t.teardown(() => {
+    server.close();
+  });
 
   return `http://localhost:${address.port}`;
 }
@@ -42,16 +46,16 @@ test("passes through messages", async (t) => {
     bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
-    createErrorHandler()
+    createErrorHandler(),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const err: any = await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/basicError`, {
       json: {},
       responseType: "json",
-    })
+    }),
   );
   t.deepEqual(err.response.body, {
     message: "This is a basic error",
@@ -78,16 +82,16 @@ test("passes through codes if available and makes them exposed", async (t) => {
     bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
-    createErrorHandler()
+    createErrorHandler(),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const err: any = await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/codeError`, {
       json: {},
       responseType: "json",
-    })
+    }),
   );
   t.deepEqual(err.response.body, {
     message: "This is a code error",
@@ -119,16 +123,16 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
     bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
-    createErrorHandler()
+    createErrorHandler(),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const err: any = await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/lokeError`, {
       json: {},
       responseType: "json",
-    })
+    }),
   );
 
   const bodyComp = Object.assign({}, err.response.body, {
@@ -146,14 +150,14 @@ test("passes through expose if available on a @loke/errors type", async (t) => {
 test("passes through @loke/errors serialized in full", async (t) => {
   const app = express();
 
-  const CustomError = createErrorType({
+  const CustomError = createErrorType<{ something: string }>({
     message: "LOKE Error",
     code: "my_code",
     help: "Some help",
   });
   const implementation = {
     lokeError: () => {
-      throw new CustomError(null, { something: "else" });
+      throw new CustomError(undefined, { something: "else" });
     },
   };
   const meta: ServiceDetails<typeof implementation> = {
@@ -166,16 +170,16 @@ test("passes through @loke/errors serialized in full", async (t) => {
     bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
-    createErrorHandler()
+    createErrorHandler(),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const err: any = await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/lokeError`, {
       json: {},
       responseType: "json",
-    })
+    }),
   );
 
   const bodyComp = Object.assign({}, err.response.body, {
@@ -218,19 +222,19 @@ test("logs error stacktraces if not exposed", async (t) => {
     bodyParser.json() as any,
     inspect,
     createRequestHandler([{ implementation, meta }], { legacy: true }),
-    createErrorHandler({ log })
+    createErrorHandler({ log }),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/stackError`, {
       json: {},
-    })
+    }),
   );
   t.true(
     logged.startsWith(
-      "Error executing hello-service/stackError: Error: Stacked\n    at stack2"
-    )
+      "Error executing hello-service/stackError: Error: Stacked\n    at stack2",
+    ),
   );
 });

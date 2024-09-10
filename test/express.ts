@@ -1,4 +1,4 @@
-import test from "ava";
+import test, { ExecutionContext } from "ava";
 import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
@@ -11,7 +11,7 @@ const inspect = (req: any, res: any, next: () => void) => {
   // console.log(req.body, req.headers); // eslint-disable-line no-console
 };
 
-function createServerAddress(app: Express) {
+function createServerAddress(app: Express, t: ExecutionContext) {
   const server = http.createServer(app);
 
   server.listen(0);
@@ -20,6 +20,10 @@ function createServerAddress(app: Express) {
   if (!address || typeof address !== "object") {
     throw new Error("No server address found");
   }
+
+  t.teardown(() => {
+    server.close();
+  });
 
   return `http://localhost:${address.port}`;
 }
@@ -47,10 +51,10 @@ test("basic integration test", async (t) => {
     "/rpc",
     bodyParser.json() as any,
     inspect,
-    createRequestHandler([{ implementation, meta }])
+    createRequestHandler([{ implementation, meta }]),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   // Basic method
   {
@@ -77,13 +81,13 @@ test("basic integration test", async (t) => {
   await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/hello-service/missingMethod`, {
       json: { msg: "world" },
-    })
+    }),
   );
 
   await t.throwsAsync(() =>
     got.post(`${serverAddress}/rpc/missing-service/missingMethod`, {
       json: { msg: "world" },
-    })
+    }),
   );
 });
 
@@ -104,10 +108,10 @@ test("legacy mode should expose methods under the root path", async (t) => {
     "/rpc",
     bodyParser.json() as any,
     inspect,
-    createRequestHandler([{ implementation, meta }], { legacy: true })
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const body = await got
     .post(`${serverAddress}/rpc/hello`, {
@@ -135,10 +139,10 @@ test("legacy mode should ALSO expose methods under the new nested path", async (
     "/rpc",
     bodyParser.json() as any,
     inspect,
-    createRequestHandler([{ implementation, meta }], { legacy: true })
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const body = await got
     .post(`${serverAddress}/rpc/hello-service/hello`, {
@@ -172,10 +176,10 @@ Can include **Markdown**.`,
     "/rpc",
     bodyParser.json() as any,
     inspect,
-    createRequestHandler([{ implementation, meta }])
+    createRequestHandler([{ implementation, meta }]),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   // All service metadata
   const allMeta = (
@@ -199,7 +203,7 @@ Can include **Markdown**.`,
 
   // Method metadata
   const singleMeta = await got(
-    `${serverAddress}/rpc/hello-service/hello`
+    `${serverAddress}/rpc/hello-service/hello`,
   ).json();
   t.deepEqual(singleMeta, {
     methodName: "hello",
@@ -232,10 +236,10 @@ Can include **Markdown**.`,
     "/rpc",
     bodyParser.json() as any,
     inspect,
-    createRequestHandler([{ implementation, meta }], { legacy: true })
+    createRequestHandler([{ implementation, meta }], { legacy: true }),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   // All service metadata
   const allMeta = (
@@ -303,10 +307,10 @@ test("exposes metadata for all services in handler", async (t) => {
     "/rpc",
     bodyParser.json() as any,
     inspect,
-    createRequestHandler([service1, service2])
+    createRequestHandler([service1, service2]),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const body = await got.get(`${serverAddress}/rpc`).json();
 
