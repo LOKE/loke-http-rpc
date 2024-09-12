@@ -63,7 +63,7 @@ class ResponseValidationError extends Error {
 export interface MethodDetails<
   Req,
   Res,
-  Def extends Record<string, unknown> = Record<string, never>
+  Def extends Record<string, unknown> = Record<string, never>,
 > {
   methodTimeout?: number;
   help?: string;
@@ -73,7 +73,7 @@ export interface MethodDetails<
 
 type Methods<
   S extends Service,
-  Def extends Record<string, unknown> = Record<string, never>
+  Def extends Record<string, unknown> = Record<string, never>,
 > = {
   [K in keyof S]?: MethodDetails<
     Parameters<S[K]>[0],
@@ -84,7 +84,7 @@ type Methods<
 
 type ContextMethods<
   S extends ContextService,
-  Def extends Record<string, unknown> = Record<string, never>
+  Def extends Record<string, unknown> = Record<string, never>,
 > = {
   [K in keyof S]?: MethodDetails<
     Parameters<S[K]>[1],
@@ -99,7 +99,7 @@ interface Logger {
 
 export function contextServiceWithSchema<
   S extends ContextService,
-  Def extends Record<string, unknown> = Record<string, never>
+  Def extends Record<string, unknown> = Record<string, never>,
 >(
   service: S,
   serviceMeta: {
@@ -110,7 +110,7 @@ export function contextServiceWithSchema<
     methods: ContextMethods<S, Def>;
     logger: Logger;
     strictResponseValidation?: boolean;
-  }
+  },
 ): ServiceSet<any> {
   const wrappedService: Service = {};
 
@@ -130,7 +130,7 @@ export function contextServiceWithSchema<
 
 export function serviceWithSchema<
   S extends Service,
-  Def extends Record<string, unknown> = Record<string, never>
+  Def extends Record<string, unknown> = Record<string, never>,
 >(
   service: S,
   serviceMeta: {
@@ -141,7 +141,7 @@ export function serviceWithSchema<
     methods: Methods<S, Def>;
     logger: Logger;
     strictResponseValidation?: boolean;
-  }
+  },
 ): ServiceSet<any> {
   const ajv = new Ajv({
     keywords: [
@@ -168,10 +168,8 @@ export function serviceWithSchema<
     strictResponseValidation = process.env.NODE_ENV !== "production",
   } = serviceMeta;
 
-  const methods: [
-    string,
-    MethodDetails<unknown, unknown, Def>
-  ][] = Object.entries(serviceMeta.methods);
+  const methods: [string, MethodDetails<unknown, unknown, Def>][] =
+    Object.entries(serviceMeta.methods);
 
   for (const [methodName, methodMeta] of methods) {
     let requestSchema: ValidateFunction;
@@ -190,7 +188,7 @@ export function serviceWithSchema<
       });
     } catch (err: any) {
       throw new Error(
-        `failed to compile "${methodName}" request schema: ${err.message}`
+        `failed to compile "${methodName}" request schema: ${err.message}`,
       );
     }
 
@@ -202,7 +200,7 @@ export function serviceWithSchema<
       });
     } catch (err: any) {
       throw new Error(
-        `failed to compile "${methodName}" response schema: ${err.message}`
+        `failed to compile "${methodName}" response schema: ${err.message}`,
       );
     }
 
@@ -258,7 +256,7 @@ export function serviceWithSchema<
           logger.error(
             `rpc response schema validation errors: ${
               serviceMeta.name
-            }.${methodName} ${JSON.stringify(errors)}`
+            }.${methodName} ${JSON.stringify(errors)}`,
           );
         }
       }

@@ -16,8 +16,8 @@ export interface MethodDetails {
 }
 
 export interface ServiceDetails<
-  S,
-  Def extends Record<string, unknown> = Record<string, never>
+  S, // eslint-disable-line @typescript-eslint/no-unused-vars
+  Def extends Record<string, unknown> = Record<string, never>,
 > {
   expose: MethodDetails[];
   service: string;

@@ -1,4 +1,4 @@
-import test from "ava";
+import test, { ExecutionContext } from "ava";
 import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
@@ -18,7 +18,7 @@ const inspect = (req: any, res: any, next: () => void) => {
   next();
 };
 
-function createServerAddress(app: Express) {
+function createServerAddress(app: Express, t: ExecutionContext) {
   const server = http.createServer(app);
 
   server.listen(0);
@@ -27,6 +27,10 @@ function createServerAddress(app: Express) {
   if (!address || typeof address !== "object") {
     throw new Error("No server address found");
   }
+
+  t.teardown(() => {
+    server.close();
+  });
 
   return `http://localhost:${address.port}`;
 }
@@ -51,7 +55,7 @@ test("should validate schemas", async (t) => {
       return `success ${x.msg}`;
     }
     async badResponse(): Promise<User> {
-      return ({ username: 123 } as unknown) as User;
+      return { username: 123 } as unknown as User;
     }
     async refReq(): Promise<User> {
       throw new Error("for types only");
@@ -161,10 +165,10 @@ test("should validate schemas", async (t) => {
         logger: { error: t.log },
       }),
     ]),
-    createErrorHandler()
+    createErrorHandler(),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   const body = await got
     .post(`${serverAddress}/rpc/service1/bar`, {
@@ -195,7 +199,7 @@ test("should validate schemas", async (t) => {
         .post(`${serverAddress}/rpc/service1/bar`, {
           json: { message: "c", user: { name: 1 } },
         })
-        .json()
+        .json(),
     );
 
     t.deepEqual(JSON.parse(err.response.body as string), {
@@ -214,7 +218,7 @@ test("should validate schemas", async (t) => {
         .post(`${serverAddress}/rpc/service2/voidSchema`, {
           json: { bad: true },
         })
-        .json()
+        .json(),
     );
 
     t.deepEqual(JSON.parse(err.response.body as string), {
@@ -233,7 +237,7 @@ test("should validate schemas", async (t) => {
         .post(`${serverAddress}/rpc/service2/badResponse`, {
           json: {},
         })
-        .json()
+        .json(),
     );
 
     t.deepEqual(JSON.parse(err.response.body as string), {
@@ -251,7 +255,7 @@ test("should validate schemas", async (t) => {
       .post(`${serverAddress}/rpc/service2/unlisted`, {
         json: {},
       })
-      .json()
+      .json(),
   );
 });
 
@@ -264,7 +268,7 @@ test("test context", async (t) => {
   const service1 = {
     bar: async (
       ctx: Context,
-      args: { message: string; user: User; thing: any }
+      args: { message: string; user: User; thing: any },
     ) => {
       lastReqId = context.getRequestId(ctx);
       lastDeadline = ctx.deadline;
@@ -309,10 +313,10 @@ test("test context", async (t) => {
         logger: { error: t.log },
       }),
     ]),
-    createErrorHandler()
+    createErrorHandler(),
   );
 
-  const serverAddress = createServerAddress(app);
+  const serverAddress = createServerAddress(app, t);
 
   // Can't use static because setTimeout maxes out at 32 bits (~24 days)
   const deadline = new Date(Date.now() + 1000 * 60);

@@ -21,7 +21,7 @@ const lokeHttpRpc = require("@loke/http-rpc");
 
 const myRpcService = lokeHttpRpc.createRequestHandler(
   myService,
-  MY_SERVICE_META
+  MY_SERVICE_META,
 );
 app.use("/rpc", myRpcService);
 app.use(lokeHttpRpc.createErrorHandler({ log: (msg) => console.log(msg) }));
@@ -37,7 +37,7 @@ const { createRequestHandler, createErrorHandler } = require("@loke/http-rpc");
 // service will be exposed on /rpc/service-name
 app.use(
   "/rpc",
-  createRequestHandler([{ implementation: myService, meta: MY_SERVICE_META }])
+  createRequestHandler([{ implementation: myService, meta: MY_SERVICE_META }]),
 );
 app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 
@@ -47,7 +47,7 @@ app.use(
   "/rpc",
   createRequestHandler([{ implementation: myService, meta: MY_SERVICE_META }], {
     legacy: true,
-  })
+  }),
 );
 app.use(createErrorHandler({ log: (msg) => console.log(msg) }));
 ```
@@ -173,7 +173,7 @@ const myRpcService = contextServiceWithSchema<typeof myService, Defs>(
         responseTypeDef: { ref: "Thing" },
       },
     },
-  }
+  },
 );
 
 const rpcHandler = createRequestHandler([myRpcService]);
