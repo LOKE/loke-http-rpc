@@ -193,6 +193,7 @@ export function createRequestHandler(
             [context.requestIdKey]:
               first(req.headers["x-request-id"]) ||
               randomBytes(6).toString("base64url"),
+            [context.actorKey]: first(req.headers["x-actor"]) || null,
           });
 
           onFinished(res as any, () => abortable?.abort());
