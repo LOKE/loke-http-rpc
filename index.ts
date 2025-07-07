@@ -241,26 +241,41 @@ export function createErrorHandler(
   args: { log?: (msg: string) => void } = {},
 ): ErrorRequestHandler {
   const { log = () => undefined } = args;
+
+  // Express v5: Error handling middleware must have exactly 4 parameters
+  // Express v5: ErrorRequestHandler return type must be void (not the result of res.json())
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (err, req, res, next) => {
+    // Express v5: If headers have already been sent, delegate to default error handler
+    if (res.headersSent) {
+      return next(err);
+    }
+
     const source = `${err.serviceName}/${err.methodName}`;
+
     if (!(err instanceof RpcError)) {
       log(`Internal error executing ${source}: ${err.stack || err.message}`);
-      return res.status(500).json({ message: err.message });
+      // Express v5: Don't return the result of res.json() - just call it
+      res.status(500).json({ message: err.message });
+      return;
     }
 
     log(`Error executing ${source}: ${err.inner.stack}`);
+
     if (!err.inner.type) {
       log(
         `Legacy error returned from ${source}: name=${err.inner.name}, code=${err.inner.code}`,
       );
-      return res.status(400).json({
+      // Express v5: Don't return the result of res.json() - just call it
+      res.status(400).json({
         message: err.inner.message,
         code: err.inner.code,
       });
+      return;
     }
 
-    return res.status(400).json(err.inner);
+    // Express v5: Don't return the result of res.json() - just call it
+    res.status(400).json(err.inner);
   };
 }
 

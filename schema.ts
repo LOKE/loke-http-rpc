@@ -277,9 +277,5 @@ export function serviceWithSchema<
 // becomes
 //   "user.name should be string"
 function errorMessage(err: ErrorObject): string {
-  return (
-    (err.instancePath
-      ? err.instancePath.slice(1).replace(/\//g, ".") + " "
-      : "") + err.message
-  );
+  return ((err.instancePath ? err.instancePath.slice(1).replace(/\//g, ".") + " " : "") + err.message);
 }
