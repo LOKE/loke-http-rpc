@@ -49,7 +49,7 @@
     "prom-client": ">=12 <=15"
   },
   "dependencies": {
-    "@loke/context": "^0.0.1",
+    "@loke/context": "^0.1.0",
     "ajv": "^8.17.1",
     "on-finished": "^2.4.1"
   }
