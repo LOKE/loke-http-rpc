@@ -97,25 +97,20 @@ interface Logger {
   error: (str: string) => void;
 }
 
-export interface ContextServiceMeta<
-  S extends ContextService,
-  Def extends Record<string, unknown> = Record<string, never>,
-> {
-  name: string;
-  definitions?: {
-    [K in keyof Def]: JTDSchemaType<Def[K], Def>;
-  };
-  methods: ContextMethods<S, Def>;
-  logger: Logger;
-  strictResponseValidation?: boolean;
-}
-
 export function contextServiceWithSchema<
   S extends ContextService,
   Def extends Record<string, unknown> = Record<string, never>,
 >(
   service: S,
-  serviceMeta: ContextServiceMeta<S, Def>,
+  serviceMeta: {
+    name: string;
+    definitions?: {
+      [K in keyof Def]: JTDSchemaType<Def[K], Def>;
+    };
+    methods: ContextMethods<S, Def>;
+    logger: Logger;
+    strictResponseValidation?: boolean;
+  },
 ): ServiceSet<any> {
   const wrappedService: Service = {};
 
