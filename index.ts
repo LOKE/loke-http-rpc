@@ -25,7 +25,7 @@ export {
 export {
   serviceWithSchema,
   contextServiceWithSchema,
-  ContextServiceMeta,
+  ContextMethods,
   voidSchema,
   VoidSchema,
 } from "./schema";
