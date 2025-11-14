@@ -82,7 +82,7 @@ type Methods<
   >;
 };
 
-type ContextMethods<
+export type ContextMethods<
   S extends ContextService,
   Def extends Record<string, unknown> = Record<string, never>,
 > = {
