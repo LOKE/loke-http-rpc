@@ -127,7 +127,7 @@ test("should validate schemas", async (t) => {
             responseTypeDef: { ref: "User" },
           },
         },
-        logger: { error: t.log },
+        logger: { error: t.log, warn: t.log },
       }),
       serviceWithSchema<Service2, Defs>(service2, {
         name: "service2",
@@ -162,7 +162,7 @@ test("should validate schemas", async (t) => {
           },
           noSchema: {},
         },
-        logger: { error: t.log },
+        logger: { error: t.log, warn: t.log },
       }),
     ]),
     createErrorHandler(),
@@ -310,7 +310,7 @@ test("test context", async (t) => {
             responseTypeDef: { ref: "User" },
           },
         },
-        logger: { error: t.log },
+        logger: { error: t.log, warn: t.log },
       }),
     ]),
     createErrorHandler(),
@@ -334,4 +334,167 @@ test("test context", async (t) => {
   t.is(lastReqId, "the-request-id");
   t.is(lastDeadline, deadline.getTime());
   t.deepEqual(body, { name: "1" });
+});
+
+test("non-strict request validation should log warnings instead of throwing", async (t) => {
+  const app = express();
+
+  const service1 = {
+    foo: async (x: { message: string }) => {
+      return `success ${x.message}`;
+    },
+  };
+
+  const loggedWarnings: string[] = [];
+
+  app.use(
+    "/rpc",
+    bodyParser.json() as any,
+    createRequestHandler([
+      serviceWithSchema<typeof service1>(service1, {
+        name: "service1",
+        methods: {
+          foo: {
+            requestTypeDef: {
+              properties: {
+                message: { type: "string" },
+              },
+            },
+            responseTypeDef: { type: "string" },
+          },
+        },
+        logger: {
+          error: t.log,
+          warn: (msg: string) => {
+            loggedWarnings.push(msg);
+            t.log(msg);
+          },
+        },
+        strictRequestValidation: false,
+      }),
+    ]),
+    createErrorHandler(),
+  );
+
+  const serverAddress = createServerAddress(app, t);
+
+  // Send invalid request (number instead of string)
+  const body = await got
+    .post(`${serverAddress}/rpc/service1/foo`, {
+      json: { message: 123 },
+    })
+    .json();
+
+  // The request should succeed despite invalid input
+  t.is(body, "success 123");
+
+  // But we should have logged a warning
+  t.is(loggedWarnings.length, 1);
+  t.true(loggedWarnings[0].includes("rpc request schema validation errors"));
+  t.true(loggedWarnings[0].includes("service1.foo"));
+});
+
+test("strict request validation should throw errors (default behavior)", async (t) => {
+  const app = express();
+
+  const service1 = {
+    foo: async (x: { message: string }) => {
+      return `success ${x.message}`;
+    },
+  };
+
+  app.use(
+    "/rpc",
+    bodyParser.json() as any,
+    createRequestHandler([
+      serviceWithSchema<typeof service1>(service1, {
+        name: "service1",
+        methods: {
+          foo: {
+            requestTypeDef: {
+              properties: {
+                message: { type: "string" },
+              },
+            },
+            responseTypeDef: { type: "string" },
+          },
+        },
+        logger: { error: t.log, warn: t.log },
+        strictRequestValidation: true,
+      }),
+    ]),
+    createErrorHandler(),
+  );
+
+  const serverAddress = createServerAddress(app, t);
+
+  // Send invalid request (number instead of string)
+  const err: HTTPError = await t.throwsAsync(() =>
+    got
+      .post(`${serverAddress}/rpc/service1/foo`, {
+        json: { message: 123 },
+      })
+      .json(),
+  );
+
+  t.deepEqual(JSON.parse(err.response.body as string), {
+    message: "message must be string",
+    code: "validation",
+    type: "https://errors.loke.global/@loke/http-rpc/validation",
+    instancePath: "/message",
+    schemaPath: "/properties/message/type",
+  });
+});
+
+test("default behavior should be strict request validation", async (t) => {
+  const app = express();
+
+  const service1 = {
+    foo: async (x: { message: string }) => {
+      return `success ${x.message}`;
+    },
+  };
+
+  app.use(
+    "/rpc",
+    bodyParser.json() as any,
+    createRequestHandler([
+      serviceWithSchema<typeof service1>(service1, {
+        name: "service1",
+        methods: {
+          foo: {
+            requestTypeDef: {
+              properties: {
+                message: { type: "string" },
+              },
+            },
+            responseTypeDef: { type: "string" },
+          },
+        },
+        logger: { error: t.log, warn: t.log },
+        // NOTE: strictRequestValidation not specified - should default to true
+      }),
+    ]),
+    createErrorHandler(),
+  );
+
+  const serverAddress = createServerAddress(app, t);
+
+  // Send invalid request (number instead of string)
+  const err: HTTPError = await t.throwsAsync(() =>
+    got
+      .post(`${serverAddress}/rpc/service1/foo`, {
+        json: { message: 123 },
+      })
+      .json(),
+  );
+
+  // Should throw validation error by default
+  t.deepEqual(JSON.parse(err.response.body as string), {
+    message: "message must be string",
+    code: "validation",
+    type: "https://errors.loke.global/@loke/http-rpc/validation",
+    instancePath: "/message",
+    schemaPath: "/properties/message/type",
+  });
 });

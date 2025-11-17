@@ -95,6 +95,7 @@ export type ContextMethods<
 
 interface Logger {
   error: (str: string) => void;
+  warn: (str: string) => void;
 }
 
 export function contextServiceWithSchema<
@@ -109,6 +110,7 @@ export function contextServiceWithSchema<
     };
     methods: ContextMethods<S, Def>;
     logger: Logger;
+    strictRequestValidation?: boolean;
     strictResponseValidation?: boolean;
   },
 ): ServiceSet<any> {
@@ -140,6 +142,7 @@ export function serviceWithSchema<
     };
     methods: Methods<S, Def>;
     logger: Logger;
+    strictRequestValidation?: boolean;
     strictResponseValidation?: boolean;
   },
 ): ServiceSet<any> {
@@ -165,6 +168,7 @@ export function serviceWithSchema<
 
   const {
     logger,
+    strictRequestValidation = true,
     strictResponseValidation = process.env.NODE_ENV !== "production",
   } = serviceMeta;
 
@@ -217,19 +221,28 @@ export function serviceWithSchema<
     implementation[methodName] = async (args: unknown) => {
       if (!requestSchema(args)) {
         const errors = requestSchema.errors;
-        let msg = "request schema validation error";
 
-        const params: ValidationErrorParams = {};
-        if (Array.isArray(errors)) {
-          const err = errors[0];
-          if (err) {
-            params.instancePath = err.instancePath;
-            params.schemaPath = err.schemaPath;
-            msg = errorMessage(err);
+        if (strictRequestValidation) {
+          let msg = "request schema validation error";
+
+          const params: ValidationErrorParams = {};
+          if (Array.isArray(errors)) {
+            const err = errors[0];
+            if (err) {
+              params.instancePath = err.instancePath;
+              params.schemaPath = err.schemaPath;
+              msg = errorMessage(err);
+            }
           }
-        }
 
-        throw new ValidationError(msg, params);
+          throw new ValidationError(msg, params);
+        } else {
+          logger.warn(
+            `rpc request schema validation errors: ${
+              serviceMeta.name
+            }.${methodName} ${JSON.stringify(errors)}`,
+          );
+        }
       }
 
       const result = await endpoint(args);
@@ -253,7 +266,7 @@ export function serviceWithSchema<
 
           throw new ResponseValidationError(msg, params);
         } else {
-          logger.error(
+          logger.warn(
             `rpc response schema validation errors: ${
               serviceMeta.name
             }.${methodName} ${JSON.stringify(errors)}`,
