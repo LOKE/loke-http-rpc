@@ -335,3 +335,166 @@ test("test context", async (t) => {
   t.is(lastDeadline, deadline.getTime());
   t.deepEqual(body, { name: "1" });
 });
+
+test("should validate union types correctly", async (t) => {
+  const app = express();
+
+  interface KountaMeta {
+    type: "kounta";
+    apiKey: string;
+  }
+
+  interface ZonalMeta {
+    type: "zonal";
+    token: string;
+  }
+
+  interface PublicApiMeta {
+    type: "publicApi";
+    clientId: string;
+  }
+
+  type OrderingConfigMeta = KountaMeta | ZonalMeta | PublicApiMeta;
+
+  const service = {
+    updateConfig: async (args: { config: OrderingConfigMeta }) => {
+      return { success: true, configType: args.config.type };
+    },
+  };
+
+  app.use(
+    "/rpc",
+    bodyParser.json() as any,
+    inspect,
+    createRequestHandler([
+      serviceWithSchema<typeof service>(service, {
+        name: "configService",
+        methods: {
+          updateConfig: {
+            requestTypeDef: {
+              properties: {
+                config: {
+                  discriminator: "type",
+                  mapping: {
+                    kounta: {
+                      properties: {
+                        apiKey: { type: "string" },
+                      },
+                    },
+                    zonal: {
+                      properties: {
+                        token: { type: "string" },
+                      },
+                    },
+                    publicApi: {
+                      properties: {
+                        clientId: { type: "string" },
+                      },
+                    },
+                  },
+                },
+              },
+            } as any,
+            responseTypeDef: {
+              properties: {
+                success: { type: "boolean" },
+                configType: { type: "string" },
+              },
+            } as any,
+          },
+        },
+        logger: { error: t.log },
+      }),
+    ]),
+    createErrorHandler(),
+  );
+
+  const serverAddress = createServerAddress(app, t);
+
+  // Valid KountaMeta should work
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/configService/updateConfig`, {
+        json: { config: { type: "kounta", apiKey: "test-key-123" } },
+      })
+      .json();
+
+    t.deepEqual(body, { success: true, configType: "kounta" });
+  }
+
+  // Valid ZonalMeta should work
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/configService/updateConfig`, {
+        json: { config: { type: "zonal", token: "test-token-456" } },
+      })
+      .json();
+
+    t.deepEqual(body, { success: true, configType: "zonal" });
+  }
+
+  // Valid PublicApiMeta should work
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/configService/updateConfig`, {
+        json: { config: { type: "publicApi", clientId: "client-789" } },
+      })
+      .json();
+
+    t.deepEqual(body, { success: true, configType: "publicApi" });
+  }
+
+  // Invalid type not in union should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/configService/updateConfig`, {
+          json: { config: { type: "invalid", someField: "value" } },
+        })
+        .json(),
+    );
+
+    const errorBody = JSON.parse(err.response.body as string);
+    t.is(errorBody.code, "validation");
+    t.is(
+      errorBody.type,
+      "https://errors.loke.global/@loke/http-rpc/validation",
+    );
+  }
+
+  // Missing required field for union member should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/configService/updateConfig`, {
+          json: { config: { type: "kounta" } }, // missing apiKey
+        })
+        .json(),
+    );
+
+    const errorBody = JSON.parse(err.response.body as string);
+    t.is(errorBody.code, "validation");
+    t.is(
+      errorBody.type,
+      "https://errors.loke.global/@loke/http-rpc/validation",
+    );
+  }
+
+  // Wrong type for required field should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/configService/updateConfig`, {
+          json: { config: { type: "zonal", token: 123 } }, // token should be string
+        })
+        .json(),
+    );
+
+    const errorBody = JSON.parse(err.response.body as string);
+    t.is(errorBody.code, "validation");
+    t.is(
+      errorBody.type,
+      "https://errors.loke.global/@loke/http-rpc/validation",
+    );
+  }
+});

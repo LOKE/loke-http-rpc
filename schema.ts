@@ -9,6 +9,7 @@ import {
   ContextService,
   ServiceDetails,
   requestContexts,
+  UnionSchemaType,
 } from "./common";
 
 interface ValidationErrorParams {
@@ -105,7 +106,7 @@ export function contextServiceWithSchema<
   serviceMeta: {
     name: string;
     definitions?: {
-      [K in keyof Def]: JTDSchemaType<Def[K], Def>;
+      [K in keyof Def]: JTDSchemaType<Def[K], Def> | UnionSchemaType<Def[K], Def>;
     };
     methods: ContextMethods<S, Def>;
     logger: Logger;
@@ -136,7 +137,7 @@ export function serviceWithSchema<
   serviceMeta: {
     name: string;
     definitions?: {
-      [K in keyof Def]: JTDSchemaType<Def[K], Def>;
+      [K in keyof Def]: JTDSchemaType<Def[K], Def> | UnionSchemaType<Def[K], Def>;
     };
     methods: Methods<S, Def>;
     logger: Logger;
