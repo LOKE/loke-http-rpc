@@ -498,3 +498,300 @@ test("should validate union types correctly", async (t) => {
     );
   }
 });
+
+test("should validate non-discriminated union types correctly", async (t) => {
+  const app = express();
+
+  interface SuccessResponse {
+    status: "success";
+    data: string;
+  }
+
+  interface ErrorResponse {
+    status: "error";
+    errorCode: number;
+    message: string;
+  }
+
+  interface WarningResponse {
+    status: "warning";
+    warningLevel: number;
+  }
+
+  type ApiResponse = SuccessResponse | ErrorResponse | WarningResponse;
+
+  type Defs = {
+    SuccessResponse: SuccessResponse;
+    ErrorResponse: ErrorResponse;
+    WarningResponse: WarningResponse;
+    ApiResponse: ApiResponse;
+  };
+
+  const service = {
+    makeRequest: async (args: { input: string }): Promise<ApiResponse> => {
+      if (args.input === "success") {
+        return { status: "success", data: "result" };
+      } else if (args.input === "error") {
+        return { status: "error", errorCode: 500, message: "failed" };
+      } else {
+        return { status: "warning", warningLevel: 1 };
+      }
+    },
+  };
+
+  app.use(
+    "/rpc",
+    bodyParser.json() as any,
+    inspect,
+    createRequestHandler([
+      serviceWithSchema<typeof service, Defs>(service, {
+        name: "apiService",
+        definitions: {
+          SuccessResponse: {
+            properties: {
+              status: { enum: ["success"] },
+              data: { type: "string" },
+            },
+          },
+          ErrorResponse: {
+            properties: {
+              status: { enum: ["error"] },
+              errorCode: { type: "int32" },
+              message: { type: "string" },
+            },
+          },
+          WarningResponse: {
+            properties: {
+              status: { enum: ["warning"] },
+              warningLevel: { type: "int32" },
+            },
+          },
+          ApiResponse: {
+            metadata: {
+              union: [
+                { ref: "SuccessResponse" },
+                { ref: "ErrorResponse" },
+                { ref: "WarningResponse" },
+              ],
+            },
+          },
+        },
+        methods: {
+          makeRequest: {
+            requestTypeDef: {
+              properties: {
+                input: { type: "string" },
+              },
+            },
+            responseTypeDef: { ref: "ApiResponse" },
+          },
+        },
+        logger: { error: t.log },
+      }),
+    ]),
+    createErrorHandler(),
+  );
+
+  const serverAddress = createServerAddress(app, t);
+
+  // Valid SuccessResponse should work
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/apiService/makeRequest`, {
+        json: { input: "success" },
+      })
+      .json();
+
+    t.deepEqual(body, { status: "success", data: "result" });
+  }
+
+  // Valid ErrorResponse should work
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/apiService/makeRequest`, {
+        json: { input: "error" },
+      })
+      .json();
+
+    t.deepEqual(body, {
+      status: "error",
+      errorCode: 500,
+      message: "failed",
+    });
+  }
+
+  // Valid WarningResponse should work
+  {
+    const body = await got
+      .post(`${serverAddress}/rpc/apiService/makeRequest`, {
+        json: { input: "warning" },
+      })
+      .json();
+
+    t.deepEqual(body, { status: "warning", warningLevel: 1 });
+  }
+});
+
+test("should throw validation errors for invalid non-discriminated union types", async (t) => {
+  const app = express();
+
+  interface StringValue {
+    type: "string";
+    value: string;
+  }
+
+  interface NumberValue {
+    type: "number";
+    value: number;
+  }
+
+  interface BooleanValue {
+    type: "boolean";
+    value: boolean;
+  }
+
+  type ConfigValue = StringValue | NumberValue | BooleanValue;
+
+  type Defs = {
+    StringValue: StringValue;
+    NumberValue: NumberValue;
+    BooleanValue: BooleanValue;
+    ConfigValue: ConfigValue;
+  };
+
+  const service = {
+    updateValue: async (args: { config: ConfigValue }) => {
+      return { success: true };
+    },
+  };
+
+  app.use(
+    "/rpc",
+    bodyParser.json() as any,
+    inspect,
+    createRequestHandler([
+      serviceWithSchema<typeof service, Defs>(service, {
+        name: "configService",
+        definitions: {
+          StringValue: {
+            properties: {
+              type: { enum: ["string"] },
+              value: { type: "string" },
+            },
+          },
+          NumberValue: {
+            properties: {
+              type: { enum: ["number"] },
+              value: { type: "float64" },
+            },
+          },
+          BooleanValue: {
+            properties: {
+              type: { enum: ["boolean"] },
+              value: { type: "boolean" },
+            },
+          },
+          ConfigValue: {
+            metadata: {
+              union: [
+                { ref: "StringValue" },
+                { ref: "NumberValue" },
+                { ref: "BooleanValue" },
+              ],
+            },
+          },
+        },
+        methods: {
+          updateValue: {
+            requestTypeDef: {
+              properties: {
+                config: { ref: "ConfigValue" },
+              },
+            },
+            responseTypeDef: {
+              properties: {
+                success: { type: "boolean" },
+              },
+            },
+          },
+        },
+        logger: { error: t.log },
+      }),
+    ]),
+    createErrorHandler(),
+  );
+
+  const serverAddress = createServerAddress(app, t);
+
+  // Invalid: type not in union should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/configService/updateValue`, {
+          json: { config: { type: "invalid", value: "test" } },
+        })
+        .json(),
+    );
+
+    const errorBody = JSON.parse(err.response.body as string);
+    t.is(errorBody.code, "validation");
+    t.is(
+      errorBody.type,
+      "https://errors.loke.global/@loke/http-rpc/validation",
+    );
+  }
+
+  // Invalid: wrong value type for StringValue should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/configService/updateValue`, {
+          json: { config: { type: "string", value: 123 } }, // value should be string
+        })
+        .json(),
+    );
+
+    const errorBody = JSON.parse(err.response.body as string);
+    t.is(errorBody.code, "validation");
+    t.is(
+      errorBody.type,
+      "https://errors.loke.global/@loke/http-rpc/validation",
+    );
+  }
+
+  // Invalid: wrong value type for NumberValue should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/configService/updateValue`, {
+          json: { config: { type: "number", value: "not a number" } },
+        })
+        .json(),
+    );
+
+    const errorBody = JSON.parse(err.response.body as string);
+    t.is(errorBody.code, "validation");
+    t.is(
+      errorBody.type,
+      "https://errors.loke.global/@loke/http-rpc/validation",
+    );
+  }
+
+  // Invalid: missing required field should fail
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/configService/updateValue`, {
+          json: { config: { type: "boolean" } }, // missing value field
+        })
+        .json(),
+    );
+
+    const errorBody = JSON.parse(err.response.body as string);
+    t.is(errorBody.code, "validation");
+    t.is(
+      errorBody.type,
+      "https://errors.loke.global/@loke/http-rpc/validation",
+    );
+  }
+});
