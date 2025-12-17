@@ -20,6 +20,7 @@ export {
   Method,
   ContextMethod,
   ContextService,
+  UnionSchemaType,
 } from "./common";
 
 export {
