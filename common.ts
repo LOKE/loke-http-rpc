@@ -9,9 +9,10 @@ export type Method<A = any, R = any> = (args: A) => R;
  * Strict type equality check that distinguishes between structurally similar types.
  * Returns true only if A and B are exactly the same type.
  */
-type StrictEquals<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
-  ? true
-  : false;
+type StrictEquals<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
 
 /**
  * Checks if Member is strictly equal to any member of Union.
@@ -26,9 +27,8 @@ type IsStrictUnionMember<Member, Union> = Union extends unknown
 /**
  * Returns true if Member is strictly equal to some member of Union.
  */
-type IsValidUnionRef<Member, Union> = true extends IsStrictUnionMember<Member, Union>
-  ? true
-  : false;
+type IsValidUnionRef<Member, Union> =
+  true extends IsStrictUnionMember<Member, Union> ? true : false;
 
 /**
  * Type for defining union schemas using metadata.
@@ -56,7 +56,9 @@ export type UnionSchemaType<T, Defs extends Record<string, unknown>> = {
   metadata: {
     union: Array<{
       ref: {
-        [K in keyof Defs & string]: IsValidUnionRef<Defs[K], T> extends true ? K : never;
+        [K in keyof Defs & string]: IsValidUnionRef<Defs[K], T> extends true
+          ? K
+          : never;
       }[keyof Defs & string];
     }>;
   };
