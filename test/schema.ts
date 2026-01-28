@@ -660,6 +660,7 @@ test("should throw validation errors for invalid non-discriminated union types",
   };
 
   const service = {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- This is a mock
     updateValue: async (args: { config: ConfigValue }) => {
       return { success: true };
     },

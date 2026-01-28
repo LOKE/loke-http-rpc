@@ -10,6 +10,7 @@
   "scripts": {
     "fix": "eslint . --fix && prettier --write .",
     "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
     "test": "ava -v",
     "prepare": "npm run build",
     "build": "rm -rf ./dist && tsc"
