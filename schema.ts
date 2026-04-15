@@ -230,7 +230,7 @@ export function serviceWithSchema<
           if (err) {
             params.instancePath = err.instancePath;
             params.schemaPath = err.schemaPath;
-            msg = errorMessage(err);
+            msg = errorMessage(err, args);
           }
         }
 
@@ -252,7 +252,7 @@ export function serviceWithSchema<
             if (err) {
               params.instancePath = err.instancePath;
               params.schemaPath = err.schemaPath;
-              msg = errorMessage(err);
+              msg = errorMessage(err, result);
             }
           }
 
@@ -278,13 +278,38 @@ export function serviceWithSchema<
 
 // errorMessage formats an error message from an AJV JTD error object
 // example
-//   { message : "should be string", instancePath : "/user/name" }
+//   { message : "must be string", instancePath : "/user/name" }
 // becomes
-//   "user.name should be string"
-function errorMessage(err: ErrorObject): string {
+//   "user.name must be string, received number"
+function errorMessage(err: ErrorObject, data?: unknown): string {
+  let received = "";
+  if (data !== undefined && err.instancePath) {
+    const parts = err.instancePath.slice(1).split("/");
+    let current: unknown = data;
+    for (const part of parts) {
+      if (current === null || typeof current !== "object") {
+        current = undefined;
+        break;
+      }
+      current = (current as Record<string, unknown>)[part];
+    }
+    if (current !== undefined) {
+      const t = Array.isArray(current)
+        ? "array"
+        : current === null
+          ? "null"
+          : typeof current;
+      // Show the actual value for non-string primitives (numbers, booleans).
+      // For strings, objects, and arrays only show the type to avoid logging PII.
+      const detail = t === "number" || t === "boolean" ? String(current) : t;
+      received = `, received ${detail}`;
+    }
+  }
   return (
     (err.instancePath
-      ? err.instancePath.slice(1).replace(/\//g, ".") + " "
-      : "") + err.message
+      ? `${err.instancePath.slice(1).replace(/\//g, ".")} `
+      : "") +
+    err.message +
+    received
   );
 }
