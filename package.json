@@ -16,6 +16,9 @@
     "build": "rm -rf ./dist && tsc"
   },
   "author": "Dominic Smith",
+  "repository": {
+    "url": "https://github.com/LOKE/loke-http-rpc"
+  },
   "ava": {
     "files": [
       "test/**/*"
