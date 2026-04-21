@@ -203,12 +203,46 @@ test("should validate schemas", async (t) => {
     );
 
     t.deepEqual(JSON.parse(err.response.body as string), {
-      message: "user.name must be string",
+      message: "user.name must be string, received 1",
       code: "validation",
       type: "https://errors.loke.global/@loke/http-rpc/validation",
       instancePath: "/user/name",
       schemaPath: "/definitions/User/properties/name/type",
     });
+  }
+
+  // null leaf value should report received null
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/service1/bar`, {
+          json: { message: "c", user: { name: null } },
+        })
+        .json(),
+    );
+
+    t.deepEqual(JSON.parse(err.response.body as string), {
+      message: "user.name must be string, received null",
+      code: "validation",
+      type: "https://errors.loke.global/@loke/http-rpc/validation",
+      instancePath: "/user/name",
+      schemaPath: "/definitions/User/properties/name/type",
+    });
+  }
+
+  // null parent object should report received null
+  {
+    const err: HTTPError = await t.throwsAsync(() =>
+      got
+        .post(`${serverAddress}/rpc/service1/bar`, {
+          json: { message: "c", user: null },
+        })
+        .json(),
+    );
+
+    const body = JSON.parse(err.response.body as string);
+    t.is(body.code, "validation");
+    t.regex(body.message, /received null/);
   }
 
   // Methods with invalid void should fail
