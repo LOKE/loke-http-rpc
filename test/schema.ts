@@ -35,6 +35,115 @@ function createServerAddress(app: Express, t: ExecutionContext) {
   return `http://localhost:${address.port}`;
 }
 
+test("schema helpers accept interface and class service types", (t) => {
+  interface SchemaHelperLocation {
+    name: string;
+  }
+
+  type SchemaHelperDefs = { SchemaHelperLocation: SchemaHelperLocation };
+
+  interface InterfaceLocationsService {
+    getLocation(args: { id: string }): Promise<SchemaHelperLocation>;
+  }
+
+  const interfaceService: InterfaceLocationsService = {
+    async getLocation(args) {
+      return { name: args.id };
+    },
+  };
+
+  class ClassLocationsService {
+    async getLocation(args: { id: string }): Promise<SchemaHelperLocation> {
+      return { name: args.id };
+    }
+  }
+
+  class ContextLocationsService {
+    async getLocation(
+      ctx: Context,
+      args: { id: string },
+    ): Promise<SchemaHelperLocation> {
+      context.getRequestId(ctx);
+      return { name: args.id };
+    }
+  }
+
+  const interfaceServiceSet = serviceWithSchema<
+    InterfaceLocationsService,
+    SchemaHelperDefs
+  >(interfaceService, {
+    name: "interfaceLocations",
+    methods: {
+      getLocation: {
+        requestTypeDef: {
+          properties: {
+            id: { type: "string" },
+          },
+        },
+        responseTypeDef: {
+          properties: {
+            name: { type: "string" },
+          },
+        },
+      },
+    },
+    logger: { error: t.log },
+  });
+
+  const classServiceSet = serviceWithSchema<
+    ClassLocationsService,
+    SchemaHelperDefs
+  >(new ClassLocationsService(), {
+    name: "classLocations",
+    methods: {
+      getLocation: {
+        requestTypeDef: {
+          properties: {
+            id: { type: "string" },
+          },
+        },
+        responseTypeDef: {
+          properties: {
+            name: { type: "string" },
+          },
+        },
+      },
+    },
+    logger: { error: t.log },
+  });
+
+  const contextClassServiceSet = contextServiceWithSchema<
+    ContextLocationsService,
+    SchemaHelperDefs
+  >(new ContextLocationsService(), {
+    name: "contextClassLocations",
+    methods: {
+      getLocation: {
+        requestTypeDef: {
+          properties: {
+            id: { type: "string" },
+          },
+        },
+        responseTypeDef: {
+          properties: {
+            name: { type: "string" },
+          },
+        },
+      },
+    },
+    logger: { error: t.log },
+  });
+
+  t.deepEqual(
+    [
+      interfaceServiceSet.meta.expose[0].methodName,
+      classServiceSet.meta.expose[0].methodName,
+      contextClassServiceSet.meta.expose[0].methodName,
+    ],
+    ["getLocation", "getLocation", "getLocation"],
+  );
+});
+
 test("should validate schemas", async (t) => {
   const app = express();
 
