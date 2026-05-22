@@ -201,8 +201,7 @@ function createServiceWithSchema<
     strictResponseValidation = process.env.NODE_ENV !== "production",
   } = serviceMeta;
 
-  for (const methodName in serviceMeta.methods) {
-    const methodMeta = serviceMeta.methods[methodName];
+  for (const [methodName, methodMeta] of Object.entries(serviceMeta.methods)) {
     if (!methodMeta) {
       continue;
     }

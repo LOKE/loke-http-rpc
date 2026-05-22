@@ -68,25 +68,17 @@ test("schema helpers accept interface and class service types", (t) => {
     }
   }
 
+  const getLocationSchema = {
+    requestTypeDef: { properties: { id: { type: "string" } } },
+    responseTypeDef: { properties: { name: { type: "string" } } },
+  } as const;
+
   const interfaceServiceSet = serviceWithSchema<
     InterfaceLocationsService,
     SchemaHelperDefs
   >(interfaceService, {
     name: "interfaceLocations",
-    methods: {
-      getLocation: {
-        requestTypeDef: {
-          properties: {
-            id: { type: "string" },
-          },
-        },
-        responseTypeDef: {
-          properties: {
-            name: { type: "string" },
-          },
-        },
-      },
-    },
+    methods: { getLocation: getLocationSchema },
     logger: { error: t.log },
   });
 
@@ -95,20 +87,7 @@ test("schema helpers accept interface and class service types", (t) => {
     SchemaHelperDefs
   >(new ClassLocationsService(), {
     name: "classLocations",
-    methods: {
-      getLocation: {
-        requestTypeDef: {
-          properties: {
-            id: { type: "string" },
-          },
-        },
-        responseTypeDef: {
-          properties: {
-            name: { type: "string" },
-          },
-        },
-      },
-    },
+    methods: { getLocation: getLocationSchema },
     logger: { error: t.log },
   });
 
@@ -117,20 +96,7 @@ test("schema helpers accept interface and class service types", (t) => {
     SchemaHelperDefs
   >(new ContextLocationsService(), {
     name: "contextClassLocations",
-    methods: {
-      getLocation: {
-        requestTypeDef: {
-          properties: {
-            id: { type: "string" },
-          },
-        },
-        responseTypeDef: {
-          properties: {
-            name: { type: "string" },
-          },
-        },
-      },
-    },
+    methods: { getLocation: getLocationSchema },
     logger: { error: t.log },
   });
 
