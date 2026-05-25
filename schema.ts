@@ -6,10 +6,11 @@ import Ajv, {
 import {
   ServiceSet,
   Service,
-  ContextService,
+  ContextMethod,
   ServiceDetails,
   requestContexts,
   UnionSchemaType,
+  Method,
 } from "./common";
 
 interface ValidationErrorParams {
@@ -17,7 +18,9 @@ interface ValidationErrorParams {
   schemaPath?: string;
 }
 
-export const voidSchema = { metadata: { void: true } } as const;
+export const voidSchema: { readonly metadata: { readonly void: true } } = {
+  metadata: { void: true },
+};
 
 export type VoidSchema = typeof voidSchema;
 
@@ -72,82 +75,107 @@ export interface MethodDetails<
   responseTypeDef?: JTDSchemaType<Res, Def> | VoidSchema;
 }
 
+type ServiceMethodKeys<S> = {
+  [K in keyof S]-?: NonNullable<S[K]> extends Method ? K : never;
+}[keyof S];
+
+type ContextMethodKeys<S> = {
+  [K in keyof S]-?: NonNullable<S[K]> extends ContextMethod ? K : never;
+}[keyof S];
+
+type ServiceMethod<S, K extends keyof S> =
+  NonNullable<S[K]> extends Method ? NonNullable<S[K]> : never;
+
+type ContextServiceMethod<S, K extends keyof S> =
+  NonNullable<S[K]> extends ContextMethod ? NonNullable<S[K]> : never;
+
 type Methods<
-  S extends Service,
+  S extends object,
   Def extends Record<string, unknown> = Record<string, never>,
 > = {
-  [K in keyof S]?: MethodDetails<
-    Parameters<S[K]>[0],
-    Awaited<ReturnType<S[K]>>,
+  [K in ServiceMethodKeys<S>]?: MethodDetails<
+    Parameters<ServiceMethod<S, K>>[0],
+    Awaited<ReturnType<ServiceMethod<S, K>>>,
     Def
   >;
 };
 
 export type ContextMethods<
-  S extends ContextService,
+  S extends object,
   Def extends Record<string, unknown> = Record<string, never>,
 > = {
-  [K in keyof S]?: MethodDetails<
-    Parameters<S[K]>[1],
-    Awaited<ReturnType<S[K]>>,
+  [K in ContextMethodKeys<S>]?: MethodDetails<
+    Parameters<ContextServiceMethod<S, K>>[1],
+    Awaited<ReturnType<ContextServiceMethod<S, K>>>,
     Def
   >;
+};
+
+type RuntimeMethods<Def extends Record<string, unknown>> = {
+  [K in string]?: MethodDetails<unknown, unknown, Def>;
 };
 
 interface Logger {
   error: (str: string) => void;
 }
 
-export function contextServiceWithSchema<
-  S extends ContextService,
-  Def extends Record<string, unknown> = Record<string, never>,
->(
-  service: S,
-  serviceMeta: {
-    name: string;
-    definitions?: {
-      [K in keyof Def]:
-        | JTDSchemaType<Def[K], Def>
-        | UnionSchemaType<Def[K], Def>;
-    };
-    methods: ContextMethods<S, Def>;
-    logger: Logger;
-    strictResponseValidation?: boolean;
-  },
-): ServiceSet<any> {
-  const wrappedService: Service = {};
+interface ServiceMeta<
+  Def extends Record<string, unknown>,
+  M extends RuntimeMethods<Def>,
+> {
+  name: string;
+  definitions?: {
+    [K in keyof Def]: JTDSchemaType<Def[K], Def> | UnionSchemaType<Def[K], Def>;
+  };
+  methods: M;
+  logger: Logger;
+  strictResponseValidation?: boolean;
+}
 
-  for (const methodName of Object.keys(serviceMeta.methods)) {
-    wrappedService[methodName] = async (args: unknown) => {
-      const ctx = requestContexts.get(args as object);
+export function contextServiceWithSchema<
+  S extends object,
+  Def extends Record<string, unknown> = Record<string, never>,
+  M extends ContextMethods<S, Def> = ContextMethods<S, Def>,
+>(
+  service: S & { [K in keyof M]-?: ContextMethod },
+  serviceMeta: ServiceMeta<Def, M>,
+): ServiceSet<Service> {
+  return createServiceWithSchema(serviceMeta, (methodName) => {
+    return async (args: unknown) => {
+      if (typeof args !== "object" || args === null) {
+        throw new Error("missing request context");
+      }
+
+      const ctx = requestContexts.get(args);
       if (!ctx) {
         throw new Error("missing request context");
       }
 
       return await service[methodName](ctx, args);
     };
-  }
-
-  return serviceWithSchema(wrappedService, serviceMeta);
+  });
 }
 
 export function serviceWithSchema<
-  S extends Service,
+  S extends object,
   Def extends Record<string, unknown> = Record<string, never>,
+  M extends Methods<S, Def> = Methods<S, Def>,
 >(
-  service: S,
-  serviceMeta: {
-    name: string;
-    definitions?: {
-      [K in keyof Def]:
-        | JTDSchemaType<Def[K], Def>
-        | UnionSchemaType<Def[K], Def>;
-    };
-    methods: Methods<S, Def>;
-    logger: Logger;
-    strictResponseValidation?: boolean;
-  },
-): ServiceSet<any> {
+  service: S & { [K in keyof M]-?: Method },
+  serviceMeta: ServiceMeta<Def, M>,
+): ServiceSet<Service> {
+  return createServiceWithSchema(serviceMeta, (methodName) =>
+    service[methodName].bind(service),
+  );
+}
+
+function createServiceWithSchema<
+  Def extends Record<string, unknown>,
+  M extends RuntimeMethods<Def>,
+>(
+  serviceMeta: ServiceMeta<Def, M>,
+  getEndpoint: (methodName: keyof M & string) => Method,
+): ServiceSet<Service> {
   const ajv = new Ajv({
     keywords: [
       {
@@ -162,7 +190,7 @@ export function serviceWithSchema<
     [methodName: string]: (args: unknown) => Promise<unknown>;
   } = {};
 
-  const serviceDetails: ServiceDetails<S, Def> = {
+  const serviceDetails: ServiceDetails<Service, Def> = {
     service: serviceMeta.name,
     definitions: serviceMeta.definitions,
     expose: [],
@@ -173,10 +201,11 @@ export function serviceWithSchema<
     strictResponseValidation = process.env.NODE_ENV !== "production",
   } = serviceMeta;
 
-  const methods: [string, MethodDetails<unknown, unknown, Def>][] =
-    Object.entries(serviceMeta.methods);
+  for (const [methodName, methodMeta] of Object.entries(serviceMeta.methods)) {
+    if (!methodMeta) {
+      continue;
+    }
 
-  for (const [methodName, methodMeta] of methods) {
     let requestSchema: ValidateFunction;
     try {
       requestSchema = ajv.compile({
@@ -191,9 +220,11 @@ export function serviceWithSchema<
 
         ...methodMeta.requestTypeDef,
       });
-    } catch (err: any) {
+    } catch (err) {
       throw new Error(
-        `failed to compile "${methodName}" request schema: ${err.message}`,
+        `failed to compile "${methodName}" request schema: ${errorDescription(
+          err,
+        )}`,
       );
     }
 
@@ -203,9 +234,11 @@ export function serviceWithSchema<
         definitions: serviceMeta.definitions,
         ...methodMeta.responseTypeDef,
       });
-    } catch (err: any) {
+    } catch (err) {
       throw new Error(
-        `failed to compile "${methodName}" response schema: ${err.message}`,
+        `failed to compile "${methodName}" response schema: ${errorDescription(
+          err,
+        )}`,
       );
     }
 
@@ -217,7 +250,7 @@ export function serviceWithSchema<
       responseTypeDef: methodMeta.responseTypeDef,
     });
 
-    const endpoint = service[methodName].bind(service);
+    const endpoint = getEndpoint(methodName);
 
     implementation[methodName] = async (args: unknown) => {
       if (!requestSchema(args)) {
@@ -276,6 +309,10 @@ export function serviceWithSchema<
   };
 }
 
+function errorDescription(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 // errorMessage formats an error message from an AJV JTD error object
 // example
 //   { message : "must be string", instancePath : "/user/name" }
@@ -291,7 +328,7 @@ function errorMessage(err: ErrorObject, data?: unknown): string {
         current = undefined;
         break;
       }
-      current = (current as Record<string, unknown>)[part];
+      current = Reflect.get(current, part);
     }
     if (current !== undefined) {
       const t = Array.isArray(current)
