@@ -1,16 +1,46 @@
 import { Histogram, Counter } from "prom-client";
-import { RequestHandler, ErrorRequestHandler } from "express";
 import { Abortable } from "@loke/context";
 import * as context from "@loke/context";
 import onFinished from "on-finished";
 import { randomBytes } from "crypto";
-
 import {
   ServiceSet,
   ServiceDetails,
   MethodDetails,
   requestContexts,
 } from "./common";
+
+// These types are shaped to be backwards compatible with Express — existing
+// users can pass our handlers directly to app.use() without type errors.
+// They can be made stricter in the next major version.
+interface RpcRequest {
+  method?: string;
+  headers: Record<string, string | string[] | undefined>;
+  path: string;
+  body: object;
+  on(event: "close", listener: () => void): void;
+}
+
+interface RpcResponse {
+  headersSent: boolean;
+  json(body: unknown): void;
+  status(code: number): this;
+}
+
+type NextFunction = (err?: unknown) => void;
+
+export type RequestHandler = (
+  req: RpcRequest,
+  res: RpcResponse,
+  next: NextFunction,
+) => void | Promise<void>;
+
+export type ErrorRequestHandler = (
+  err: any,
+  req: RpcRequest,
+  res: RpcResponse,
+  next: NextFunction,
+) => void;
 
 export {
   ServiceSet,
@@ -261,7 +291,6 @@ export function createErrorHandler(
       res.status(500).json({ message: err.message });
       return;
     }
-
     log(`Error executing ${source}: ${err.inner.stack}`);
 
     if (!err.inner.type) {
