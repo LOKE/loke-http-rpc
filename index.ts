@@ -13,7 +13,7 @@ import {
 // These types are shaped to be backwards compatible with Express — existing
 // users can pass our handlers directly to app.use() without type errors.
 // They can be made stricter in the next major version.
-interface RpcRequest {
+export interface RpcRequest {
   method?: string;
   headers: Record<string, string | string[] | undefined>;
   path: string;
@@ -21,13 +21,13 @@ interface RpcRequest {
   on(event: "close", listener: () => void): void;
 }
 
-interface RpcResponse {
+export interface RpcResponse {
   headersSent: boolean;
   json(body: unknown): void;
   status(code: number): this;
 }
 
-type NextFunction = (err?: unknown) => void;
+export type NextFunction = (err?: unknown) => void;
 
 export type RequestHandler = (
   req: RpcRequest,
