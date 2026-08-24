@@ -107,6 +107,31 @@ Also, to list runtime RPC metadata you can GET /rpc
 curl -X GET http://localhost:5000/rpc
 ```
 
+## Fetch Handler
+
+For servers that speak WHATWG `Request`/`Response`, `createFetchHandler` returns a handler that takes a `Request` and resolves to a `Response`. It does its own routing, metadata and error responses, so there is no separate error handler to mount.
+
+```js
+const { createFetchHandler } = require("@loke/http-rpc");
+
+const rpc = createFetchHandler(
+  [
+    {
+      implementation: service,
+      meta: SERVICE_META,
+    },
+  ],
+  {
+    basePath: "/rpc",
+    log: (msg) => console.log(msg),
+  },
+);
+
+const response = await rpc(request);
+```
+
+`basePath` is stripped before routing and defaults to `/rpc`, so serving rpc from the root of a server needs `basePath: ""`.
+
 ## Schemas and Context
 
 Since v5.1.0 we now support
