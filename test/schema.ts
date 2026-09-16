@@ -110,6 +110,52 @@ test("schema helpers accept interface and class service types", (t) => {
   );
 });
 
+test("schema helpers reject methods the other helper should take", (t) => {
+  class NoContextLocationsService {
+    async getLocation(args: { id: string }): Promise<{ name: string }> {
+      return { name: args.id };
+    }
+  }
+
+  class ContextLocationsService {
+    async getLocation(
+      ctx: Context,
+      args: { id: string },
+    ): Promise<{ name: string }> {
+      context.getRequestId(ctx);
+      return { name: args.id };
+    }
+  }
+
+  const getLocationSchema = {
+    requestTypeDef: { properties: { id: { type: "string" } } },
+    responseTypeDef: { properties: { name: { type: "string" } } },
+  } as const;
+
+  contextServiceWithSchema<NoContextLocationsService>(
+    new NoContextLocationsService(),
+    {
+      name: "noContextLocations",
+      methods: {
+        // @ts-expect-error getLocation takes args first
+        getLocation: getLocationSchema,
+      },
+      logger: { error: t.log },
+    },
+  );
+
+  serviceWithSchema<ContextLocationsService>(new ContextLocationsService(), {
+    name: "contextLocations",
+    methods: {
+      // @ts-expect-error getLocation takes a context first
+      getLocation: getLocationSchema,
+    },
+    logger: { error: t.log },
+  });
+
+  t.pass();
+});
+
 test("should validate schemas", async (t) => {
   const app = express();
 
