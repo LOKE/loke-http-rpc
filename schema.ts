@@ -75,54 +75,49 @@ export interface MethodDetails<
   responseTypeDef?: JTDSchemaType<Res, Def> | VoidSchema;
 }
 
-type ServiceMethodKeys<S> = {
-  [K in keyof S]-?: NonNullable<S[K]> extends Method ? K : never;
+type AnyMethod = (...args: never[]) => unknown;
+
+// every method key, not just the well shaped ones: a mapped type over zero keys
+// collapses to {} and silently accepts anything
+type MethodKeys<S> = {
+  [K in keyof S]-?: NonNullable<S[K]> extends AnyMethod ? K : never;
 }[keyof S];
 
-type ContextMethodKeys<S> = {
-  [K in keyof S]-?: NonNullable<S[K]> extends ContextMethod ? K : never;
-}[keyof S];
+// the permissive schema props keep the only complaint on the missing marker, so
+// the error lands on the method name and reads as the message
+type WrongShape<Message extends string> = {
+  [K in Message]: never;
+} & Partial<Record<keyof MethodDetails<never, never>, unknown>>;
 
-type ServiceMethod<S, K extends keyof S> =
-  NonNullable<S[K]> extends Method ? NonNullable<S[K]> : never;
-
-type ContextServiceMethod<S, K extends keyof S> =
-  NonNullable<S[K]> extends ContextMethod ? NonNullable<S[K]> : never;
+type MethodSchema<
+  Fn extends AnyMethod,
+  ArgIndex extends 0 | 1,
+  Def extends Record<string, unknown>,
+> = MethodDetails<Parameters<Fn>[ArgIndex], Awaited<ReturnType<Fn>>, Def>;
 
 type Methods<
   S extends object,
   Def extends Record<string, unknown> = Record<string, never>,
 > = {
-  [K in ServiceMethodKeys<S>]?: MethodDetails<
-    Parameters<ServiceMethod<S, K>>[0],
-    Awaited<ReturnType<ServiceMethod<S, K>>>,
-    Def
-  >;
+  [K in MethodKeys<S>]?: NonNullable<S[K]> extends Method
+    ? MethodSchema<Extract<NonNullable<S[K]>, Method>, 0, Def>
+    : WrongShape<`${K & string} takes a Context first, use contextServiceWithSchema`>;
 };
 
 export type ContextMethods<
   S extends object,
   Def extends Record<string, unknown> = Record<string, never>,
 > = {
-  [K in ContextMethodKeys<S>]?: MethodDetails<
-    Parameters<ContextServiceMethod<S, K>>[1],
-    Awaited<ReturnType<ContextServiceMethod<S, K>>>,
-    Def
-  >;
-};
-
-type RuntimeMethods<Def extends Record<string, unknown>> = {
-  [K in string]?: MethodDetails<unknown, unknown, Def>;
+  [K in MethodKeys<S>]?: NonNullable<S[K]> extends ContextMethod
+    ? MethodSchema<Extract<NonNullable<S[K]>, ContextMethod>, 1, Def>
+    : WrongShape<`${K & string} must accept a Context as its first argument`>;
 };
 
 interface Logger {
   error: (str: string) => void;
 }
 
-interface ServiceMeta<
-  Def extends Record<string, unknown>,
-  M extends RuntimeMethods<Def>,
-> {
+interface ServiceMeta<Def extends Record<string, unknown>, M> {
   name: string;
   definitions?: {
     [K in keyof Def]: JTDSchemaType<Def[K], Def> | UnionSchemaType<Def[K], Def>;
@@ -136,10 +131,10 @@ export function contextServiceWithSchema<
   S extends object,
   Def extends Record<string, unknown> = Record<string, never>,
   M extends ContextMethods<S, Def> = ContextMethods<S, Def>,
->(
-  service: S & { [K in keyof M]-?: ContextMethod },
-  serviceMeta: ServiceMeta<Def, M>,
-): ServiceSet<Service> {
+>(service: S, serviceMeta: ServiceMeta<Def, M>): ServiceSet<Service> {
+  // ContextMethods has already rejected anything that isn't this shape
+  const methods = service as Record<string, ContextMethod>;
+
   return createServiceWithSchema(serviceMeta, (methodName) => {
     return async (args: unknown) => {
       if (typeof args !== "object" || args === null) {
@@ -151,7 +146,7 @@ export function contextServiceWithSchema<
         throw new Error("missing request context");
       }
 
-      return await service[methodName](ctx, args);
+      return await methods[methodName](ctx, args);
     };
   });
 }
@@ -160,21 +155,26 @@ export function serviceWithSchema<
   S extends object,
   Def extends Record<string, unknown> = Record<string, never>,
   M extends Methods<S, Def> = Methods<S, Def>,
->(
-  service: S & { [K in keyof M]-?: Method },
-  serviceMeta: ServiceMeta<Def, M>,
-): ServiceSet<Service> {
+>(service: S, serviceMeta: ServiceMeta<Def, M>): ServiceSet<Service> {
+  // Methods has already rejected anything that isn't this shape
+  const methods = service as Record<string, Method>;
+
   return createServiceWithSchema(serviceMeta, (methodName) =>
-    service[methodName].bind(service),
+    methods[methodName].bind(service),
   );
 }
 
-function createServiceWithSchema<
-  Def extends Record<string, unknown>,
-  M extends RuntimeMethods<Def>,
->(
-  serviceMeta: ServiceMeta<Def, M>,
-  getEndpoint: (methodName: keyof M & string) => Method,
+function asMethodDetails<Def extends Record<string, unknown>>(
+  value: unknown,
+): MethodDetails<unknown, unknown, Def> | undefined {
+  return typeof value === "object" && value !== null
+    ? (value as MethodDetails<unknown, unknown, Def>)
+    : undefined;
+}
+
+function createServiceWithSchema<Def extends Record<string, unknown>>(
+  serviceMeta: ServiceMeta<Def, Record<string, unknown>>,
+  getEndpoint: (methodName: string) => Method,
 ): ServiceSet<Service> {
   const ajv = new Ajv({
     keywords: [
@@ -201,7 +201,8 @@ function createServiceWithSchema<
     strictResponseValidation = process.env.NODE_ENV !== "production",
   } = serviceMeta;
 
-  for (const [methodName, methodMeta] of Object.entries(serviceMeta.methods)) {
+  for (const [methodName, value] of Object.entries(serviceMeta.methods)) {
+    const methodMeta = asMethodDetails<Def>(value);
     if (!methodMeta) {
       continue;
     }
