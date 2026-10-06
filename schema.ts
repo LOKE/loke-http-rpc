@@ -172,20 +172,21 @@ function asMethodDetails<Def extends Record<string, unknown>>(
     : undefined;
 }
 
+// Shared: each instance compiles the JTD meta-schema on first use (~75ms), once per service otherwise.
+const ajv = new Ajv({
+  keywords: [
+    {
+      keyword: "void",
+      validate: (_: unknown, data: unknown) => data === undefined,
+      errors: false,
+    },
+  ],
+});
+
 function createServiceWithSchema<Def extends Record<string, unknown>>(
   serviceMeta: ServiceMeta<Def, Record<string, unknown>>,
   getEndpoint: (methodName: string) => Method,
 ): ServiceSet<Service> {
-  const ajv = new Ajv({
-    keywords: [
-      {
-        keyword: "void",
-        validate: (_: unknown, data: unknown) => data === undefined,
-        errors: false,
-      },
-    ],
-  });
-
   const implementation: {
     [methodName: string]: (args: unknown) => Promise<unknown>;
   } = {};
@@ -207,41 +208,26 @@ function createServiceWithSchema<Def extends Record<string, unknown>>(
       continue;
     }
 
-    let requestSchema: ValidateFunction;
-    try {
-      requestSchema = ajv.compile({
-        definitions: serviceMeta.definitions,
-        // Be liberal in what we accept, but let the consumer service force strict
-        // if needed
-        // https://en.wikipedia.org/wiki/Robustness_principle
-        // this is a bit of a mess, default to additionalProperties true if schema has properties
-        ...("properties" in (methodMeta.requestTypeDef || {})
-          ? { additionalProperties: true }
-          : undefined),
+    const requestSchema = compileOnFirstUse(`"${methodName}" request schema`, {
+      definitions: serviceMeta.definitions,
+      // Be liberal in what we accept, but let the consumer service force strict
+      // if needed
+      // https://en.wikipedia.org/wiki/Robustness_principle
+      // this is a bit of a mess, default to additionalProperties true if schema has properties
+      ...("properties" in (methodMeta.requestTypeDef || {})
+        ? { additionalProperties: true }
+        : undefined),
 
-        ...methodMeta.requestTypeDef,
-      });
-    } catch (err) {
-      throw new Error(
-        `failed to compile "${methodName}" request schema: ${errorDescription(
-          err,
-        )}`,
-      );
-    }
+      ...methodMeta.requestTypeDef,
+    });
 
-    let responseSchema: ValidateFunction;
-    try {
-      responseSchema = ajv.compile({
+    const responseSchema = compileOnFirstUse(
+      `"${methodName}" response schema`,
+      {
         definitions: serviceMeta.definitions,
         ...methodMeta.responseTypeDef,
-      });
-    } catch (err) {
-      throw new Error(
-        `failed to compile "${methodName}" response schema: ${errorDescription(
-          err,
-        )}`,
-      );
-    }
+      },
+    );
 
     serviceDetails.expose.push({
       methodName,
@@ -254,8 +240,9 @@ function createServiceWithSchema<Def extends Record<string, unknown>>(
     const endpoint = getEndpoint(methodName);
 
     implementation[methodName] = async (args: unknown) => {
-      if (!requestSchema(args)) {
-        const errors = requestSchema.errors;
+      const validateRequest = requestSchema();
+      if (!validateRequest(args)) {
+        const errors = validateRequest.errors;
         let msg = "request schema validation error";
 
         const params: ValidationErrorParams = {};
@@ -273,11 +260,12 @@ function createServiceWithSchema<Def extends Record<string, unknown>>(
 
       const result = await endpoint(args);
 
-      if (!responseSchema(result)) {
-        const errors = responseSchema.errors;
+      const validateResponse = responseSchema();
+      if (!validateResponse(result)) {
+        const errors = validateResponse.errors;
 
         if (strictResponseValidation) {
-          const errors = responseSchema.errors;
+          const errors = validateResponse.errors;
           let msg = "response schema validation error";
 
           const params: ValidationErrorParams = {};
@@ -307,6 +295,24 @@ function createServiceWithSchema<Def extends Record<string, unknown>>(
   return {
     implementation,
     meta: serviceDetails,
+  };
+}
+
+// Compiling every method up front costs ~200ms of startup in large services.
+function compileOnFirstUse(
+  label: string,
+  schema: Record<string, unknown>,
+): () => ValidateFunction {
+  let validate: ValidateFunction | undefined;
+  return () => {
+    if (!validate) {
+      try {
+        validate = ajv.compile(schema);
+      } catch (err) {
+        throw new Error(`failed to compile ${label}: ${errorDescription(err)}`);
+      }
+    }
+    return validate;
   };
 }
 
