@@ -107,6 +107,35 @@ Also, to list runtime RPC metadata you can GET /rpc
 curl -X GET http://localhost:5000/rpc
 ```
 
+## Fetch-native handler (v5.11.0)
+
+`createFetchHandler(services, { legacy?, log? })` returns an async
+`(request: Request) => Promise<Response>` handler for Bun or other Fetch runtimes:
+
+```ts
+import { createFetchHandler } from "@loke/http-rpc";
+
+const fetch = createFetchHandler([
+  { implementation: myService, meta: MY_SERVICE_META },
+]);
+Bun.serve({ fetch, maxRequestBodySize: 11 * 1024 * 1024 });
+```
+
+Routes use the URL pathname: GET `/`, `/:service`, `/:service/:method`, and POST
+`/:service/:method`. Strip any mount prefix before passing the request.
+`legacy: true` also exposes `/:method` for a single service.
+POST bodies with `application/json` (including charset parameters) are parsed;
+empty bodies and other content types supply `{}`. Malformed JSON or non-object
+JSON returns HTTP 400 with `{ "message": "Invalid JSON" }`.
+Unmatched paths or methods return HTTP 404 with
+`{ "message": "Not Found" }`: unlike Express middleware fall-through, a standalone
+Fetch handler must produce a response.
+
+Service errors and logging match `createErrorHandler`; void results become `null`.
+Request IDs and deadlines use `x-request-id` and `x-request-deadline`. Contexts
+abort on request-signal cancellation and when execution finishes. Configure body
+size limits in the hosting server; the handler does not enforce them.
+
 ## Schemas and Context
 
 Since v5.1.0 we now support

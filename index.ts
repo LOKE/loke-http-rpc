@@ -148,26 +148,30 @@ interface CreateRequestHandlerOptions {
   legacy?: boolean;
 }
 
-export function createRequestHandler(
-  services: ServiceSet<any>[],
-  options?: CreateRequestHandlerOptions,
-): RequestHandler {
-  const { legacy = false } = options || {};
+interface DispatchRequest {
+  body: object;
+  headers: RpcRequest["headers"];
+  onAbort(abort: () => void): () => void;
+}
 
+type DispatchHandler = (req: DispatchRequest) => Promise<unknown>;
+
+function createDispatcher(
+  services: ServiceSet<any>[],
+  { legacy = false }: CreateRequestHandlerOptions = {},
+) {
   if (legacy && services.length !== 1) {
     throw new Error("Only 1 service is supported in legacy mode");
   }
 
-  const postHandlers = new Map<string, RequestHandler>();
-  const getHandlers = new Map<string, RequestHandler>();
+  const postHandlers = new Map<string, DispatchHandler>();
+  const getHandlers = new Map<string, DispatchHandler>();
 
   const meta = {
     services: Object.values(services.map((s) => getExposedMeta(s.meta))),
   };
 
-  getHandlers.set("/", (req, res) => {
-    res.json(meta);
-  });
+  getHandlers.set("/", async () => meta);
 
   for (const service of services) {
     const serviceName = service.meta.service;
@@ -175,9 +179,7 @@ export function createRequestHandler(
       (s) => s.serviceName === serviceName,
     );
 
-    getHandlers.set(`/${serviceName}`, (req, res) => {
-      res.json(serviceMeta);
-    });
+    getHandlers.set(`/${serviceName}`, async () => serviceMeta);
 
     for (const methodDef of service.meta.expose) {
       const { methodName } = methodDef;
@@ -185,9 +187,7 @@ export function createRequestHandler(
         (s) => s.methodName === methodName,
       );
 
-      const getHandler: RequestHandler = (req, res) => {
-        res.json(methodMeta);
-      };
+      const getHandler: DispatchHandler = async () => methodMeta;
       getHandlers.set(`/${serviceName}/${methodName}`, getHandler);
       if (legacy) {
         getHandlers.set(`/${methodName}`, getHandler);
@@ -203,10 +203,11 @@ export function createRequestHandler(
         service.implementation,
       );
 
-      const postHandler: RequestHandler = async (req, res, next) => {
+      const postHandler: DispatchHandler = async (req) => {
         const end = requestDuration.startTimer(requestMeta);
 
         let abortable: Abortable | null = null;
+        let removeAbortListener: () => void = () => undefined;
         try {
           requestCount.inc(requestMeta);
 
@@ -227,19 +228,17 @@ export function createRequestHandler(
               randomBytes(6).toString("base64url"),
           });
 
-          onFinished(res as any, () => abortable?.abort());
+          removeAbortListener = req.onAbort(abortable.abort);
 
           requestContexts.set(req.body, ctx);
-          const result = await methodFn(req.body);
-
-          // Return null for void result to help old clients
-          res.json(result ?? null);
+          return await methodFn(req.body);
         } catch (err: any) {
           failureCount.inc({ type: err.type || "<none>", ...requestMeta });
-          next(new RpcError(serviceName, methodName, err));
+          throw new RpcError(serviceName, methodName, err);
         } finally {
           end();
           abortable?.abort();
+          removeAbortListener();
         }
       };
 
@@ -250,23 +249,107 @@ export function createRequestHandler(
     }
   }
 
-  return async (req, res, next) => {
-    let handler: RequestHandler | undefined;
-    switch (req.method) {
+  return (method: string | undefined, path: string) => {
+    switch (method) {
       case "GET":
-        handler = getHandlers.get(req.path);
-        break;
+        return getHandlers.get(path);
       case "POST":
-        handler = postHandlers.get(req.path);
-        break;
+        return postHandlers.get(path);
     }
-
-    if (!handler) {
-      return next();
-    }
-
-    handler(req, res, next);
   };
+}
+
+export function createRequestHandler(
+  services: ServiceSet<any>[],
+  options?: CreateRequestHandlerOptions,
+): RequestHandler {
+  const dispatch = createDispatcher(services, options);
+  return async (req, res, next) => {
+    const handler = dispatch(req.method, req.path);
+    if (!handler) return next();
+    void handler({
+      body: req.body,
+      headers: req.headers,
+      onAbort: (abort) => {
+        onFinished(res as any, abort);
+        return () => undefined;
+      },
+    }).then((result) => res.json(result ?? null), next);
+  };
+}
+
+export function createFetchHandler(
+  services: ServiceSet<any>[],
+  options: { legacy?: boolean; log?: (msg: string) => void } = {},
+): (request: Request) => Promise<Response> {
+  const dispatch = createDispatcher(services, options);
+  const log = options.log || (() => undefined);
+  return async (request) => {
+    try {
+      const handler = dispatch(request.method, new URL(request.url).pathname);
+      if (!handler)
+        return Response.json({ message: "Not Found" }, { status: 404 });
+      let body: object = {};
+      const contentType = request.headers
+        .get("content-type")
+        ?.split(";")[0]
+        .trim()
+        .toLowerCase();
+      if (request.method === "POST" && contentType === "application/json") {
+        const text = await request.text();
+        try {
+          const parsed: unknown = text ? JSON.parse(text) : {};
+          if (parsed === null || typeof parsed !== "object") {
+            return Response.json({ message: "Invalid JSON" }, { status: 400 });
+          }
+          body = parsed;
+        } catch (err) {
+          if (!(err instanceof SyntaxError)) throw err;
+          return Response.json({ message: "Invalid JSON" }, { status: 400 });
+        }
+      }
+      const result = await handler({
+        body,
+        headers: {
+          "x-request-deadline":
+            request.headers.get("x-request-deadline") ?? undefined,
+          "x-request-id": request.headers.get("x-request-id") ?? undefined,
+        },
+        onAbort: (abort) => {
+          request.signal.addEventListener("abort", abort, { once: true });
+          if (request.signal.aborted) abort();
+          return () => request.signal.removeEventListener("abort", abort);
+        },
+      });
+      return Response.json(result ?? null);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      const { status, body } = mapError(error, log);
+      return Response.json(body, { status });
+    }
+  };
+}
+
+function mapError(
+  err: Error & Partial<Pick<RpcError, "serviceName" | "methodName">>,
+  log: (msg: string) => void,
+) {
+  const source = `${err.serviceName}/${err.methodName}`;
+  if (!(err instanceof RpcError)) {
+    log(`Internal error executing ${source}: ${err.stack || err.message}`);
+    return { status: 500, body: { message: err.message } };
+  }
+  log(`Error executing ${source}: ${err.inner.stack}`);
+  if (!err.inner.type) {
+    log(
+      `Legacy error returned from ${source}: name=${err.inner.name}, code=${err.inner.code}`,
+    );
+    return {
+      status: 400,
+      body: { message: err.inner.message, code: err.inner.code },
+    };
+  }
+  return { status: 400, body: err.inner };
 }
 
 export function createErrorHandler(
@@ -283,30 +366,8 @@ export function createErrorHandler(
       return next(err);
     }
 
-    const source = `${err.serviceName}/${err.methodName}`;
-
-    if (!(err instanceof RpcError)) {
-      log(`Internal error executing ${source}: ${err.stack || err.message}`);
-      // Express v5: Don't return the result of res.json() - just call it
-      res.status(500).json({ message: err.message });
-      return;
-    }
-    log(`Error executing ${source}: ${err.inner.stack}`);
-
-    if (!err.inner.type) {
-      log(
-        `Legacy error returned from ${source}: name=${err.inner.name}, code=${err.inner.code}`,
-      );
-      // Express v5: Don't return the result of res.json() - just call it
-      res.status(400).json({
-        message: err.inner.message,
-        code: err.inner.code,
-      });
-      return;
-    }
-
-    // Express v5: Don't return the result of res.json() - just call it
-    res.status(400).json(err.inner);
+    const { status, body } = mapError(err, log);
+    res.status(status).json(body);
   };
 }
 
