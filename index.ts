@@ -148,15 +148,16 @@ interface CreateRequestHandlerOptions {
   legacy?: boolean;
 }
 
-interface DispatchRequest {
+interface DispatchRequest<T> {
   body: object;
   headers: RpcRequest["headers"];
   onAbort(abort: () => void): () => void;
+  respond(result: unknown): T;
 }
 
-type DispatchHandler = (req: DispatchRequest) => Promise<unknown>;
+type DispatchHandler<T> = (req: DispatchRequest<T>) => Promise<T>;
 
-function createDispatcher(
+function createDispatcher<T>(
   services: ServiceSet<any>[],
   { legacy = false }: CreateRequestHandlerOptions = {},
 ) {
@@ -164,14 +165,14 @@ function createDispatcher(
     throw new Error("Only 1 service is supported in legacy mode");
   }
 
-  const postHandlers = new Map<string, DispatchHandler>();
-  const getHandlers = new Map<string, DispatchHandler>();
+  const postHandlers = new Map<string, DispatchHandler<T>>();
+  const getHandlers = new Map<string, DispatchHandler<T>>();
 
   const meta = {
     services: Object.values(services.map((s) => getExposedMeta(s.meta))),
   };
 
-  getHandlers.set("/", async () => meta);
+  getHandlers.set("/", async (req) => req.respond(meta));
 
   for (const service of services) {
     const serviceName = service.meta.service;
@@ -179,7 +180,7 @@ function createDispatcher(
       (s) => s.serviceName === serviceName,
     );
 
-    getHandlers.set(`/${serviceName}`, async () => serviceMeta);
+    getHandlers.set(`/${serviceName}`, async (req) => req.respond(serviceMeta));
 
     for (const methodDef of service.meta.expose) {
       const { methodName } = methodDef;
@@ -187,7 +188,8 @@ function createDispatcher(
         (s) => s.methodName === methodName,
       );
 
-      const getHandler: DispatchHandler = async () => methodMeta;
+      const getHandler: DispatchHandler<T> = async (req) =>
+        req.respond(methodMeta);
       getHandlers.set(`/${serviceName}/${methodName}`, getHandler);
       if (legacy) {
         getHandlers.set(`/${methodName}`, getHandler);
@@ -203,7 +205,7 @@ function createDispatcher(
         service.implementation,
       );
 
-      const postHandler: DispatchHandler = async (req) => {
+      const postHandler: DispatchHandler<T> = async (req) => {
         const end = requestDuration.startTimer(requestMeta);
 
         let abortable: Abortable | null = null;
@@ -231,7 +233,7 @@ function createDispatcher(
           removeAbortListener = req.onAbort(abortable.abort);
 
           requestContexts.set(req.body, ctx);
-          return await methodFn(req.body);
+          return req.respond((await methodFn(req.body)) ?? null);
         } catch (err: any) {
           failureCount.inc({ type: err.type || "<none>", ...requestMeta });
           throw new RpcError(serviceName, methodName, err);
@@ -263,18 +265,23 @@ export function createRequestHandler(
   services: ServiceSet<any>[],
   options?: CreateRequestHandlerOptions,
 ): RequestHandler {
-  const dispatch = createDispatcher(services, options);
+  const dispatch = createDispatcher<void>(services, options);
   return async (req, res, next) => {
     const handler = dispatch(req.method, req.path);
     if (!handler) return next();
-    void handler({
-      body: req.body,
-      headers: req.headers,
-      onAbort: (abort) => {
-        onFinished(res as any, abort);
-        return () => undefined;
-      },
-    }).then((result) => res.json(result ?? null), next);
+    try {
+      await handler({
+        body: req.body,
+        headers: req.headers,
+        onAbort: (abort) => {
+          onFinished(res as any, abort);
+          return () => undefined;
+        },
+        respond: (result) => res.json(result),
+      });
+    } catch (err) {
+      next(err);
+    }
   };
 }
 
@@ -282,7 +289,7 @@ export function createFetchHandler(
   services: ServiceSet<any>[],
   options: { legacy?: boolean; log?: (msg: string) => void } = {},
 ): (request: Request) => Promise<Response> {
-  const dispatch = createDispatcher(services, options);
+  const dispatch = createDispatcher<Response>(services, options);
   const log = options.log || (() => undefined);
   return async (request) => {
     try {
@@ -308,8 +315,9 @@ export function createFetchHandler(
           return Response.json({ message: "Invalid JSON" }, { status: 400 });
         }
       }
-      const result = await handler({
+      return await handler({
         body,
+        respond: (result) => Response.json(result),
         headers: {
           "x-request-deadline":
             request.headers.get("x-request-deadline") ?? undefined,
@@ -321,7 +329,6 @@ export function createFetchHandler(
           return () => request.signal.removeEventListener("abort", abort);
         },
       });
-      return Response.json(result ?? null);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       const { status, body } = mapError(error, log);

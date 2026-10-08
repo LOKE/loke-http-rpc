@@ -249,3 +249,45 @@ test("fetch observes a signal already aborted before dispatch", async (t) => {
   );
   t.is(await response.json(), true);
 });
+
+test("fetch keeps context active during serialization and records serialization failures", async (t) => {
+  let signal: AbortSignal | undefined;
+  const logs: string[] = [];
+  const service = {
+    implementation: {
+      inspect: (args: object) => {
+        signal = requestContexts.get(args)?.signal;
+        return { toJSON: () => ({ aborted: signal?.aborted }) };
+      },
+      broken: () => ({
+        toJSON: () => {
+          throw new Error("serialization failed");
+        },
+      }),
+    },
+    meta: {
+      service: "serialization",
+      expose: [{ methodName: "inspect" }, { methodName: "broken" }],
+    },
+  };
+  const handler = createFetchHandler([service], {
+    log: (message) => logs.push(message),
+  });
+  t.deepEqual(await (await handler(request("/serialization/inspect"))).json(), {
+    aborted: false,
+  });
+  t.true(signal?.aborted);
+  const response = await handler(request("/serialization/broken"));
+  t.is(response.status, 400);
+  t.deepEqual(await response.json(), { message: "serialization failed" });
+  t.true(logs[0].startsWith("Error executing serialization/broken:"));
+  const failures = await (
+    register.getSingleMetric("http_rpc_failures_total") as Counter
+  ).get();
+  t.true(
+    failures.values.some(
+      (value) =>
+        value.labels.handler === "serialization.broken" && value.value === 1,
+    ),
+  );
+});
