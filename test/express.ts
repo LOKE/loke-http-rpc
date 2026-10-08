@@ -3,7 +3,13 @@ import http from "http";
 import express, { Express } from "express";
 import bodyParser from "body-parser";
 import got from "got";
-import { createRequestHandler, ServiceDetails } from "../";
+import {
+  createRequestHandler,
+  createErrorHandler,
+  ServiceDetails,
+} from "../index";
+import { requestContexts } from "../common";
+import { Counter, register } from "prom-client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const inspect = (req: any, res: any, next: () => void) => {
@@ -344,4 +350,61 @@ test("exposes metadata for all services in handler", async (t) => {
       },
     ],
   });
+});
+
+test("keeps context active through serialization and forwards serialization errors", async (t) => {
+  const app = express();
+  const logs: string[] = [];
+  let signal: AbortSignal | undefined;
+  const implementation = {
+    inspect: (args: object) => {
+      signal = requestContexts.get(args)?.signal;
+      return { toJSON: () => ({ aborted: signal?.aborted }) };
+    },
+    broken: () => ({
+      toJSON: () => {
+        throw new Error("serialization failed");
+      },
+    }),
+  };
+  app.use(
+    "/rpc",
+    express.json(),
+    createRequestHandler([
+      {
+        implementation,
+        meta: {
+          service: "serialization",
+          expose: [{ methodName: "inspect" }, { methodName: "broken" }],
+        },
+      },
+    ]),
+    createErrorHandler({ log: (message) => logs.push(message) }),
+  );
+  const address = createServerAddress(app, t);
+  t.deepEqual(
+    await got.post(`${address}/rpc/serialization/inspect`, { json: {} }).json(),
+    {
+      aborted: false,
+    },
+  );
+  t.true(signal?.aborted);
+  const response = await got.post(`${address}/rpc/serialization/broken`, {
+    json: {},
+    responseType: "json",
+    throwHttpErrors: false,
+    timeout: { request: 2000 },
+  });
+  t.is(response.statusCode, 400);
+  t.deepEqual(response.body, { message: "serialization failed" });
+  t.true(logs[0].startsWith("Error executing serialization/broken:"));
+  const failures = await (
+    register.getSingleMetric("http_rpc_failures_total") as Counter
+  ).get();
+  t.true(
+    failures.values.some(
+      (value) =>
+        value.labels.handler === "serialization.broken" && value.value === 1,
+    ),
+  );
 });
